@@ -82,6 +82,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 {
     static final String CONFIG_GROUP = "anotherbronzemanmode";
     private static final String UNLOCKED_ITEMS_STRING = "!bronzemanunlocks";
+    private static final String RESET_STRING = "!reset";
 
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
 
@@ -156,6 +157,11 @@ public class AnotherBronzemanModePlugin extends Plugin
         unlockedItems = new ArrayList<>();
         overlayManager.add(AnotherBronzemanModeOverlay);
         chatCommandManager.registerCommand(UNLOCKED_ITEMS_STRING, this::unlockedItemsLookup);
+
+        if (config.resetCommand()) 
+        {
+            chatCommandManager.registerCommand(RESET_STRING, this::resetUnlocks);
+        }
 
         clientThread.invoke(() ->
         {
@@ -616,6 +622,21 @@ public class AnotherBronzemanModePlugin extends Plugin
         messageNode.setRuneLiteFormatMessage(response);
         chatMessageManager.update(messageNode);
         client.refreshChat();
+    }
+
+    private void resetUnlocks()
+    {
+        config.startItemsUnlocked(false);
+        try {
+            playerFile.delete();
+            unlockedItems.clear();
+            savePlayerUnlocks();
+            unlockDefaultItems();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        }
+        sendMessage("Unlocks succesfully reset!");
     }
 
     /**

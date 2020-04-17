@@ -61,4 +61,15 @@ public interface AnotherBronzemanModeConfig extends Config
     {
         return true;
     }
+
+    @ConfigItem(
+        keyName = "resetCommand",
+        name = "Enable reset command",
+        description = "Enables the !reset command used for wiping your unlocked items.",
+        position = 6
+    )
+    default boolean resetCommand()
+    {
+        return false;
+    }
 }
