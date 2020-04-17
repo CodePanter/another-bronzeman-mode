@@ -297,15 +297,15 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (event.getGroup().equals(CONFIG_GROUP))
         {
-            if (event.getKey() == "namesBronzeman")
+            if (event.getKey().equals("namesBronzeman"))
             {
                 updateNamesBronzeman();
             }
-            else if (event.getKey() == "screenshotUnlock" || event.getKey() == "includeFrame")
+            else if (event.getKey().equals("screenshotUnlock") || event.getKey().equals("includeFrame"))
             {
                 updateScreenshotUnlock();
             }
-            else if (event.getKey() == "resetCommand")
+            else if (event.getKey().equals("resetCommand"))
             {
                 if (config.resetCommand())
                 {
