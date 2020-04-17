@@ -634,7 +634,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         client.refreshChat();
     }
 
-    private void resetUnlocks()
+    private void resetUnlocks(ChatMessage chatMessage, String message)
     {
         config.startItemsUnlocked(false);
         try {
@@ -650,7 +650,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
 
-    private void backupUnlocks()
+    private void backupUnlocks(ChatMessage chatMessage, String message)
     {
         Path originalPath = playerFile.toPath();
         try {
