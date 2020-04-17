@@ -32,7 +32,6 @@ import net.runelite.api.events.*;
 import net.runelite.client.events.PluginChanged;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetID;
 import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.RuneLite;
 import net.runelite.client.eventbus.Subscribe;
@@ -67,6 +66,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 import java.util.Calendar;
 import java.text.SimpleDateFormat;
 
@@ -424,7 +424,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         unlockedItems.clear();
         try
         {
-            String json = Files.readString(Paths.get(String.valueOf(playerFile)));
+            String json = new Scanner(playerFile).useDelimiter("\\Z").next();
             unlockedItems.addAll(GSON.fromJson(json, new TypeToken<List<Integer>>(){}.getType()));
         }
         catch (Exception e)
