@@ -337,9 +337,9 @@ public class AnotherBronzemanModePlugin extends Plugin
                 queueItemUnlock(realItemId);
                 if (config.sendNotification())
                 {
-                    notifier.notify("New bronzeman unlock!");
+                    notifier.notify("You have unlocked a new item: " + client.getItemDefinition(realItemId).getName() + ".");
                 }
-                if (config.sendChatMessage())
+                else if (config.sendChatMessage())
                 {
                     sendChatMessage("You have unlocked a new item: " + client.getItemDefinition(realItemId).getName() + ".");
                 }
