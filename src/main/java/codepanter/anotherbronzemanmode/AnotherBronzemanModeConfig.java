@@ -37,7 +37,7 @@ public interface AnotherBronzemanModeConfig extends Config
     )
     default boolean includeFrame()
     {
-        return true;
+        return false;
     }
 
     @ConfigItem(
@@ -59,13 +59,13 @@ public interface AnotherBronzemanModeConfig extends Config
     )
     default boolean sendChatMessage()
     {
-        return true;
+        return false;
     }
 
     @ConfigItem(
         keyName = "resetCommand",
         name = "Enable reset command",
-        description = "Enables the !reset command used for wiping your unlocked items.",
+        description = "Enables the !bmreset command used for wiping your unlocked items.",
         position = 6
     )
     default boolean resetCommand()

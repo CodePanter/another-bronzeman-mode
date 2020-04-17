@@ -61,9 +61,12 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Calendar;
+import java.text.SimpleDateFormat;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Provides;
@@ -81,8 +84,10 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 public class AnotherBronzemanModePlugin extends Plugin
 {
     static final String CONFIG_GROUP = "anotherbronzemanmode";
-    private static final String UNLOCKED_ITEMS_STRING = "!bronzemanunlocks";
-    private static final String RESET_STRING = "!reset";
+    private static final String BM_UNLOCKS_STRING = "!bmunlocks";
+    private static final String BM_COUNT_STRING = "!bmcount";
+    private static final String BM_RESET_STRING = "!bmreset";
+    private static final String BM_BACKUP_STRING = "!bmbackup";
 
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
 
@@ -156,11 +161,13 @@ public class AnotherBronzemanModePlugin extends Plugin
         loadResources();
         unlockedItems = new ArrayList<>();
         overlayManager.add(AnotherBronzemanModeOverlay);
-        chatCommandManager.registerCommand(UNLOCKED_ITEMS_STRING, this::unlockedItemsLookup);
+        chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::unlockedItemsLookup);
+        chatCommandManager.registerCommand(BM_COUNT_STRING, this::unlockedItemsLookup);
+        chatCommandManager.registerCommand(BM_BACKUP_STRING, this::backupUnlocks);
 
-        if (config.resetCommand()) 
+        if (config.resetCommand())
         {
-            chatCommandManager.registerCommand(RESET_STRING, this::resetUnlocks);
+            chatCommandManager.registerCommand(BM_RESET_STRING, this::resetUnlocks);
         }
 
         clientThread.invoke(() ->
@@ -637,6 +644,22 @@ public class AnotherBronzemanModePlugin extends Plugin
             return;
         }
         sendMessage("Unlocks succesfully reset!");
+    }
+
+
+    private void backupUnlocks()
+    {
+        Path originalPath = playerFile.toPath();
+        try {
+            Calendar cal = Calendar.getInstance();
+            SimpleDateFormat sdf = new SimpleDateFormat("MM_WW_HH_mm_ss");
+            Files.copy(originalPath, Paths.get(playerFolder.getPath() + "_" + sdf.format(cal.getTime()) + ".backup"),
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+        sendMessage("Successfully backed up file!");
     }
 
     /**
