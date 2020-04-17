@@ -52,6 +52,7 @@ import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.chat.ChatColorType;
+import net.runelite.client.chat.ChatCommandManager;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.ImageUtil;
 
@@ -80,6 +81,7 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 public class AnotherBronzemanModePlugin extends Plugin
 {
     static final String CONFIG_GROUP = "anotherbronzemanmode";
+    private static final String UNLOCKED_ITEMS_STRING = "!bronzemanunlocks";
 
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
 
@@ -116,6 +118,9 @@ public class AnotherBronzemanModePlugin extends Plugin
     private ChatMessageManager chatMessageManager;
 
     @Inject
+    private ChatCommandManager chatCommandManager;
+
+    @Inject
     private AnotherBronzemanModeConfig config;
 
     @Inject
@@ -150,6 +155,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         loadResources();
         unlockedItems = new ArrayList<>();
         overlayManager.add(AnotherBronzemanModeOverlay);
+        chatCommandManager.registerCommand(UNLOCKED_ITEMS_STRING, this::unlockedItemsLookup);
 
         clientThread.invoke(() ->
         {
@@ -171,6 +177,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         super.shutDown();
         unlockedItems = null;
         overlayManager.remove(AnotherBronzemanModeOverlay);
+        chatCommandManager.unregisterCommand(UNLOCKED_ITEMS_STRING);
 
         clientThread.invoke(() ->
         {
@@ -587,6 +594,29 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
     }
 
+    private void unlockedItemsLookup(ChatMessage chatMessage, String message)
+    {
+        MessageNode messageNode = chatMessage.getMessageNode();
+
+        if (!messageNode.getName().equals(client.getLocalPlayer().getName()))
+        {
+            return;
+        }
+
+        final ChatMessageBuilder builder = new ChatMessageBuilder()
+            .append(ChatColorType.HIGHLIGHT)
+            .append("You have unlocked ")
+            .append(ChatColorType.NORMAL)
+            .append(Integer.toString(unlockedItems.size()))
+            .append(ChatColorType.HIGHLIGHT)
+            .append(" items.");
+
+        String response = builder.build();
+
+        messageNode.setRuneLiteFormatMessage(response);
+        chatMessageManager.update(messageNode);
+        client.refreshChat();
+    }
 
     /**
      * Loads the bronzeman resources into the client.
