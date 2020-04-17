@@ -41,7 +41,6 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
-import net.runelite.api.InventoryID;
 import net.runelite.client.Notifier;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.events.ConfigChanged;
@@ -241,7 +240,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (OWNED_INVENTORY_IDS.contains(e.getContainerId()))
         {
-            unlockItemContainerItems(e.getContainerId());
+            unlockItemContainerItems(e.getItemContainer());
         }
     }
 
@@ -322,9 +321,8 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /** Unlocks all items in the given item container. **/
-    public void unlockItemContainerItems(InventoryID containerId)
+    public void unlockItemContainerItems(ItemContainer itemContainer)
     {
-        ItemContainer itemContainer = client.getItemContainer(containerId);
         for (Item i : itemContainer.getItems())
         {
             int itemId = i.getId();
@@ -673,8 +671,8 @@ public class AnotherBronzemanModePlugin extends Plugin
             unlockedItems.clear();
             savePlayerUnlocks();
             unlockDefaultItems();
-            unlockItemContainerItems(InventoryID.INVENTORY);
-            unlockItemContainerItems(InventoryID.EQUIPMENT);
+            unlockItemContainerItems(client.getItemContainer(InventoryID.INVENTORY));
+            unlockItemContainerItems(client.getItemContainer(InventoryID.EQUIPMENT));
         } catch (Exception e) {
             e.printStackTrace();
             return;
