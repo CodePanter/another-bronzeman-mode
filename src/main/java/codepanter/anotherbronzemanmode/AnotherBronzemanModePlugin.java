@@ -638,7 +638,6 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void resetUnlocks(ChatMessage chatMessage, String message)
     {
-        config.startItemsUnlocked(false);
         try {
             playerFile.delete();
             unlockedItems.clear();
