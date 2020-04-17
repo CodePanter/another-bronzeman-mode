@@ -40,6 +40,7 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.api.ItemComposition;
+import net.runelite.api.ItemContainer;
 import net.runelite.client.Notifier;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.events.ConfigChanged;
@@ -239,28 +240,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (OWNED_INVENTORY_IDS.contains(e.getContainerId()))
         {
-            for (Item i : e.getItemContainer().getItems())
-            {
-                int itemId = i.getId();
-                int realItemId = itemManager.canonicalize(itemId);
-                ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-                int noteId = itemComposition.getNote();
-                if (itemId != realItemId && noteId != 799) continue;  // The 799 signifies that it is a noted item
-                if (i.getId() <= 1) continue;
-                if (i.getQuantity() <= 0) continue;
-                if (!unlockedItems.contains(realItemId))
-                {
-                    queueItemUnlock(realItemId);
-                    if (config.sendNotification())
-                    {
-                        notifier.notify("New bronzeman unlock!");
-                    }
-                    if (config.sendChatMessage())
-                    {
-                        sendChatMessage("You have unlocked a new item: " + client.getItemDefinition(realItemId).getName() + ".");
-                    }
-                }
-            }
+            unlockItemContainerItems(e.getContainerId());
         }
     }
 
@@ -337,6 +317,34 @@ public class AnotherBronzemanModePlugin extends Plugin
                 }
             }
 
+        }
+    }
+
+    /** Unlocks all items in the given item container. **/
+    public void unlockItemContainerItems(Integer containerId)
+    {
+        ItemContainer itemContainer = client.getItemContainer(containerId);
+        for (Item i : itemContainer.getItems())
+        {
+            int itemId = i.getId();
+            int realItemId = itemManager.canonicalize(itemId);
+            ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+            int noteId = itemComposition.getNote();
+            if (itemId != realItemId && noteId != 799) continue;  // The 799 signifies that it is a noted item
+            if (i.getId() <= 1) continue;
+            if (i.getQuantity() <= 0) continue;
+            if (!unlockedItems.contains(realItemId))
+            {
+                queueItemUnlock(realItemId);
+                if (config.sendNotification())
+                {
+                    notifier.notify("New bronzeman unlock!");
+                }
+                if (config.sendChatMessage())
+                {
+                    sendChatMessage("You have unlocked a new item: " + client.getItemDefinition(realItemId).getName() + ".");
+                }
+            }
         }
     }
 
@@ -664,6 +672,8 @@ public class AnotherBronzemanModePlugin extends Plugin
             unlockedItems.clear();
             savePlayerUnlocks();
             unlockDefaultItems();
+            unlockItemContainerItems(93);   // Standard player inventory.
+            unlockItemContainerItems(94);   // Equipment inventory.
         } catch (Exception e) {
             e.printStackTrace();
             return;
