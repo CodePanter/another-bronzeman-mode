@@ -12,6 +12,10 @@ When the plugin is enabled for the first time it will unlock all items in your i
 - Unlocks are handled per account so you can have multiple bronze-men or not effect the status of your bronze-man accounts.
 - Can optionally take screenshots of all new item unlocks.
 - Supports adding a list of names of other Bronzeman accounts, and will provide them with (client side) Bronzeman chat icons.
+- Has settings for sending chat messages and notifications for every item unlock.
+- Allows the command '!bmcount' and '!bmunlocks' to get a total number for all unlocked items.
+- Has a setting to enable a '!bmreset' command, which deletes all current unlocked items and starts fresh.
+- Supports a '!bmbackup' command that makes a backup of the current unlocked items list.
 
 ## Screenshots
 
