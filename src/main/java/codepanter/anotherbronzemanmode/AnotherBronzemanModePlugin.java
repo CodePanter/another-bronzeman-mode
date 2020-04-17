@@ -190,7 +190,10 @@ public class AnotherBronzemanModePlugin extends Plugin
         super.shutDown();
         unlockedItems = null;
         overlayManager.remove(AnotherBronzemanModeOverlay);
-        chatCommandManager.unregisterCommand(UNLOCKED_ITEMS_STRING);
+        chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
+        chatCommandManager.unregisterCommand(BM_COUNT_STRING);
+        chatCommandManager.unregisterCommand(BM_RESET_STRING);
+        chatCommandManager.unregisterCommand(BM_BACKUP_STRING);
 
         clientThread.invoke(() ->
         {
