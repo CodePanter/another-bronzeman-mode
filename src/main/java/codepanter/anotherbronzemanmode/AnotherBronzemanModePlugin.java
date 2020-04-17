@@ -61,6 +61,7 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -144,6 +145,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
     private boolean onLeagueWorld;
     private File playerFile;
+    private File playerFolder;
 
     @Provides
     AnotherBronzemanModeConfig provideConfig(ConfigManager configManager)
@@ -593,7 +595,7 @@ public class AnotherBronzemanModePlugin extends Plugin
      */
     private void setupPlayerFile()
     {
-        File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
+        playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
         if (!playerFolder.exists())
         {
             playerFolder.mkdirs();
@@ -646,7 +648,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             e.printStackTrace();
             return;
         }
-        sendMessage("Unlocks succesfully reset!");
+        sendChatMessage("Unlocks succesfully reset!");
     }
 
 
@@ -662,7 +664,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             e.printStackTrace();
             return;
         }
-        sendMessage("Successfully backed up file!");
+        sendChatMessage("Successfully backed up file!");
     }
 
     /**
