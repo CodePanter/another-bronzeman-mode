@@ -628,7 +628,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         {
             playerFolder.mkdirs();
         }
-        playerFile = new File(playerFolder, "bronzeman-unlocks.txt");
+        playerFile = new File(playerFolder, "another-bronzeman-mode-unlocks.txt");
         if (!playerFile.exists())
         {
             try {
