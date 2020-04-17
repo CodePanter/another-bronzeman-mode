@@ -194,8 +194,11 @@ public class AnotherBronzemanModePlugin extends Plugin
         overlayManager.remove(AnotherBronzemanModeOverlay);
         chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(BM_COUNT_STRING);
-        chatCommandManager.unregisterCommand(BM_RESET_STRING);
         chatCommandManager.unregisterCommand(BM_BACKUP_STRING);
+        if (config.resetCommand())
+        {
+            chatCommandManager.unregisterCommand(BM_RESET_STRING);
+        }
 
         clientThread.invoke(() ->
         {
@@ -314,8 +317,26 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (event.getGroup().equals(CONFIG_GROUP))
         {
-            updateNamesBronzeman();
-            updateScreenshotUnlock();
+            if (event.getKey() == "namesBronzeman")
+            {
+                updateNamesBronzeman();
+            }
+            elif (event.getKey() == "screenshotUnlock" || event.getKey() == "includeFrame")
+            {
+                updateScreenshotUnlock();
+            }
+            elif (event.getKey() == "resetCommand")
+            {
+                if (config.resetCommand())
+                {
+                    chatCommandManager.registerCommand(BM_RESET_STRING, this::resetUnlocks);
+                }
+                else
+                {
+                    chatCommandManager.unregisterCommand(BM_RESET_STRING);
+                }
+            }
+
         }
     }
 
