@@ -302,11 +302,11 @@ public class AnotherBronzemanModePlugin extends Plugin
             {
                 updateNamesBronzeman();
             }
-            elif (event.getKey() == "screenshotUnlock" || event.getKey() == "includeFrame")
+            else if (event.getKey() == "screenshotUnlock" || event.getKey() == "includeFrame")
             {
                 updateScreenshotUnlock();
             }
-            elif (event.getKey() == "resetCommand")
+            else if (event.getKey() == "resetCommand")
             {
                 if (config.resetCommand())
                 {
