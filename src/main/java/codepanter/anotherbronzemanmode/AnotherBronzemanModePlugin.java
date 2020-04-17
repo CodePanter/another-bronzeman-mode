@@ -598,7 +598,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         MessageNode messageNode = chatMessage.getMessageNode();
 
-        if (!messageNode.getName().equals(client.getLocalPlayer().getName()))
+        if (!Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName())))
         {
             return;
         }
