@@ -32,7 +32,7 @@ public interface AnotherBronzemanModeConfig extends Config
     @ConfigItem(
             keyName = "includeFrame",
             name = "Include Client Frame",
-            description = "Configures whether or not the client frame is included in screenshots",
+            description = "Configures whether or not the client frame is included in screenshots.",
             position = 3
     )
     default boolean includeFrame()
@@ -40,4 +40,25 @@ public interface AnotherBronzemanModeConfig extends Config
         return true;
     }
 
+    @ConfigItem(
+        keyName = "sendNotification",
+        name = "Notify on unlock",
+        description = "Send a notification when a new item is unlocked.",
+        position = 4
+    )
+    default boolean sendNotification()
+    {
+        return false;
+    }
+
+    @ConfigItem(
+        keyName = "sendChatMessage",
+        name = "Chat message on unlock",
+        description = "Send a chat message when a new item is unlocked.",
+        position = 5
+    )
+    default boolean sendChatMessage()
+    {
+        return true;
+    }
 }

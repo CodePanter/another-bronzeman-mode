@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.client.events.PluginChanged;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
 import net.runelite.api.widgets.WidgetInfo;
@@ -39,6 +40,7 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.api.ItemComposition;
+import net.runelite.client.Notifier;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.config.ConfigManager;
@@ -47,6 +49,9 @@ import net.runelite.client.game.WorldService;
 import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.ImageUtil;
 
@@ -91,6 +96,9 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     @Inject
     private Client client;
+
+    @Inject
+    private Notifier notifier;
 
     @Inject
     private ClientThread clientThread;
@@ -215,6 +223,14 @@ public class AnotherBronzemanModePlugin extends Plugin
                 if (!unlockedItems.contains(realItemId))
                 {
                     queueItemUnlock(realItemId);
+                    if (config.sendNotification())
+                    {
+                        notifier.notify("New bronzeman unlock!");
+                    }
+                    if (config.sendChatMessage())
+                    {
+                        sendChatMessage("You have unlocked a new item: " + client.getItemDefinition(realItemId).getName() + ".");
+                    }
                 }
             }
         }
@@ -226,32 +242,6 @@ public class AnotherBronzemanModePlugin extends Plugin
         if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT)
         {
             killSearchResults();
-        }
-    }
-
-    void killSearchResults()
-    {
-        Widget grandExchangeSearchResults = client.getWidget(162, 53);
-
-        if (grandExchangeSearchResults == null)
-        {
-            return;
-        }
-
-        Widget[] children = grandExchangeSearchResults.getDynamicChildren();
-
-        if (children == null || children.length < 2)
-        {
-            return;
-        }
-
-        for (int i = 0; i < children.length; i+= 3) {
-            if (!unlockedItems.contains(children[i + 2].getItemId()))
-            {
-                children[i].setHidden(true);
-                children[i + 1].setOpacity(70);
-                children[i + 2].setOpacity(70);
-            }
         }
     }
 
@@ -317,6 +307,46 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         queueItemUnlock(ItemID.COINS_995);
         queueItemUnlock(ItemID.OLD_SCHOOL_BOND);
+    }
+
+    private void sendChatMessage(String chatMessage)
+    {
+        final String message = new ChatMessageBuilder()
+            .append(ChatColorType.HIGHLIGHT)
+            .append(chatMessage)
+            .build();
+
+        chatMessageManager.queue(
+            QueuedMessage.builder()
+                .type(ChatMessageType.CONSOLE)
+                .runeLiteFormattedMessage(message)
+                .build());
+    }
+
+    void killSearchResults()
+    {
+        Widget grandExchangeSearchResults = client.getWidget(162, 53);
+
+        if (grandExchangeSearchResults == null)
+        {
+            return;
+        }
+
+        Widget[] children = grandExchangeSearchResults.getDynamicChildren();
+
+        if (children == null || children.length < 2)
+        {
+            return;
+        }
+
+        for (int i = 0; i < children.length; i+= 3) {
+            if (!unlockedItems.contains(children[i + 2].getItemId()))
+            {
+                children[i].setHidden(true);
+                children[i + 1].setOpacity(70);
+                children[i + 2].setOpacity(70);
+            }
+        }
     }
 
     /* Saves players unlock JSON to a .txt file every time they unlock a new item */
