@@ -80,8 +80,7 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 @PluginDescriptor(
         name = "Another Bronzeman Mode",
         description = "Limits access to buying an item on the Grand Exchange until it is obtained otherwise.",
-        tags = {"overlay", "bronzeman"},
-        enabledByDefault = false
+        tags = {"overlay", "bronzeman"}
 )
 public class AnotherBronzemanModePlugin extends Plugin
 {
