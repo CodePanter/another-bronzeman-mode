@@ -486,6 +486,19 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /**
+     * Checks if the given message was sent by the player
+     *
+     * @param chatMessage number of the world to check.
+     * @return boolean true/false if the message was sent by the player.
+     */
+    private boolean sentByPlayer(ChatMessage chatMessage)
+    {
+        MessageNode messageNode = chatMessage.getMessageNode();
+
+        return Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))
+    }
+
+    /**
      * Update the player name in the chatbox input
      */
     private void setChatboxName(String name)
@@ -641,9 +654,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void unlockedItemsLookup(ChatMessage chatMessage, String message)
     {
-        MessageNode messageNode = chatMessage.getMessageNode();
-
-        if (!Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName())))
+        if (!sentByPlayer(chatMessage))
         {
             return;
         }
@@ -665,6 +676,11 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void resetUnlocks(ChatMessage chatMessage, String message)
     {
+        if (!sentByPlayer(chatMessage))
+        {
+            return;
+        }
+
         try {
             playerFile.delete();
             unlockedItems.clear();
@@ -682,6 +698,11 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void backupUnlocks(ChatMessage chatMessage, String message)
     {
+        if (!sentByPlayer(chatMessage))
+        {
+            return;
+        }
+
         Path originalPath = playerFile.toPath();
         try {
             Calendar cal = Calendar.getInstance();
