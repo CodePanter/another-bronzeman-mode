@@ -386,7 +386,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
         Widget[] children = grandExchangeSearchResults.getDynamicChildren();
 
-        if (children == null || children.length < 2 || children.length % 3 != 0) {
+        if (children == null || children.length < 2 || children.length % 3 != 0)
         {
             return;
         }
