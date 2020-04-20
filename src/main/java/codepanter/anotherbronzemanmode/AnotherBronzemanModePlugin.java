@@ -495,7 +495,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         MessageNode messageNode = chatMessage.getMessageNode();
 
-        return Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))
+        return Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName()));
     }
 
     /**
@@ -669,6 +669,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
         String response = builder.build();
 
+        MessageNode messageNode = chatMessage.getMessageNode();
         messageNode.setRuneLiteFormatMessage(response);
         chatMessageManager.update(messageNode);
         client.refreshChat();
