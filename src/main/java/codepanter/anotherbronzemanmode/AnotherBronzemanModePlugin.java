@@ -163,13 +163,13 @@ public class AnotherBronzemanModePlugin extends Plugin
         loadResources();
         unlockedItems = new ArrayList<>();
         overlayManager.add(AnotherBronzemanModeOverlay);
-        chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::unlockedItemsLookup);
-        chatCommandManager.registerCommand(BM_COUNT_STRING, this::unlockedItemsLookup);
-        chatCommandManager.registerCommand(BM_BACKUP_STRING, this::backupUnlocks);
+        chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
+        chatCommandManager.registerCommand(BM_COUNT_STRING, this::OnUnlocksCountCommand);
+        chatCommandManager.registerCommand(BM_BACKUP_STRING, this::OnUnlocksBackupCommand);
 
         if (config.resetCommand())
         {
-            chatCommandManager.registerCommand(BM_RESET_STRING, this::resetUnlocks);
+            chatCommandManager.registerCommand(BM_RESET_STRING, this::OnUnlocksResetCommand);
         }
 
         clientThread.invoke(() ->
@@ -308,7 +308,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             {
                 if (config.resetCommand())
                 {
-                    chatCommandManager.registerCommand(BM_RESET_STRING, this::resetUnlocks);
+                    chatCommandManager.registerCommand(BM_RESET_STRING, this::OnUnlocksResetCommand);
                 }
                 else
                 {
@@ -652,7 +652,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
     }
 
-    private void unlockedItemsLookup(ChatMessage chatMessage, String message)
+    private void OnUnlocksCountCommand(ChatMessage chatMessage, String message)
     {
         if (!sentByPlayer(chatMessage))
         {
@@ -675,13 +675,17 @@ public class AnotherBronzemanModePlugin extends Plugin
         client.refreshChat();
     }
 
-    private void resetUnlocks(ChatMessage chatMessage, String message)
+    private void OnUnlocksResetCommand(ChatMessage chatMessage, String message)
     {
         if (!sentByPlayer(chatMessage))
         {
             return;
         }
+        resetItemUnlocks();
+        sendChatMessage("Unlocks succesfully reset!");
+    }
 
+    private void resetItemUnlocks(){
         try {
             playerFile.delete();
             unlockedItems.clear();
@@ -693,17 +697,20 @@ public class AnotherBronzemanModePlugin extends Plugin
             e.printStackTrace();
             return;
         }
-        sendChatMessage("Unlocks succesfully reset!");
     }
 
-
-    private void backupUnlocks(ChatMessage chatMessage, String message)
+    private void OnUnlocksBackupCommand(ChatMessage chatMessage, String message)
     {
         if (!sentByPlayer(chatMessage))
         {
             return;
         }
+        backupItemUnlocks();
+        sendChatMessage("Successfully backed up file!");
+    }
 
+    private void backupItemUnlocks()
+    {
         Path originalPath = playerFile.toPath();
         try {
             Calendar cal = Calendar.getInstance();
@@ -714,7 +721,6 @@ public class AnotherBronzemanModePlugin extends Plugin
             e.printStackTrace();
             return;
         }
-        sendChatMessage("Successfully backed up file!");
     }
 
     /**
