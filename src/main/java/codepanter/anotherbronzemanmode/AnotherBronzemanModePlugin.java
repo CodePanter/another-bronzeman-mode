@@ -274,7 +274,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         {
             case PRIVATECHAT:
             case MODPRIVATECHAT:
-                // Note this is unable to change icon on PMs if they are not a friend or in clan chat
+                // Note this is unable to change icon on PMs if they are not a friend or in friends chat
             case FRIENDSCHAT:
                 if (isChatPlayerOnNormalWorld(name) && isChatPlayerBronzeman(name))
                 {
@@ -577,22 +577,22 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /**
-     * Gets a ChatPlayer object from a clean name by searching clan and friends list.
+     * Gets a ChatPlayer object from a clean name by searching friends chat and friends list.
      *
      * @param name name of player to find.
      * @return ChatPlayer if found, else null.
      */
     private ChatPlayer getChatPlayerFromName(String name)
     {
-        // Search clan members first, because if a friend is in the clan chat but their private
+        // Search friends chat members first, because if a friend is in the friends chat but their private
         // chat is 'off', then we won't know the world
-        ClanMemberManager clanMemberManager = client.getClanMemberManager();
-        if (clanMemberManager != null)
+        FriendsChatManager friendsChatManager = client.getFriendsChatManager();
+        if (friendsChatManager != null)
         {
-            ClanMember clanMember = clanMemberManager.findByName(name);
-            if (clanMember != null)
+            FriendsChatMember friendsChatMember = friendsChatManager.findByName(name);
+            if (friendsChatMember != null)
             {
-                return clanMember;
+                return friendsChatMember;
             }
         }
 
@@ -601,7 +601,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /**
-     * Checks if a player name is a friend or clan member is a bronzeman.
+     * Checks if a player name is a friend or friends chat member is a bronzeman.
      *
      * @param name name of player to check.
      * @return boolean true/false.
@@ -612,7 +612,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /**
-     * Checks if a player name is a friend or clan member on a normal world.
+     * Checks if a player name is a friend or friends chat member on a normal world.
      *
      * @param name name of player to check.
      * @return boolean true/false.
