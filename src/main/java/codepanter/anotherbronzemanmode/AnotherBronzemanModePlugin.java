@@ -25,14 +25,14 @@
 package codepanter.anotherbronzemanmode;
 
 import com.google.common.reflect.TypeToken;
+import com.google.common.util.concurrent.Runnables;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.client.events.PluginChanged;
 import net.runelite.api.ChatMessageType;
-import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
+import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -42,6 +42,8 @@ import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.client.Notifier;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.chatbox.ChatboxPanelManager;
+import net.runelite.client.game.chatbox.ChatboxTextInput;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.util.Text;
@@ -63,16 +65,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Scanner;
-import java.util.Calendar;
+import java.util.*;
 import java.text.SimpleDateFormat;
+import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Provides;
-import java.util.Set;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
@@ -90,6 +88,14 @@ public class AnotherBronzemanModePlugin extends Plugin
     private static final String BM_RESET_STRING = "!bmreset";
     private static final String BM_BACKUP_STRING = "!bmbackup";
 
+    final int COLLECTION_LOG_GROUP_ID = 621;
+    final int COLLECTION_VIEW = 35;
+    final int COLLECTION_VIEW_SCROLLBAR = 36;
+    final int COLLECTION_VIEW_HEADER = 19;
+
+    final int MENU_INSPECT = 2;
+    final int MENU_DELETE = 3;
+
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
 
     static final Set<Integer> OWNED_INVENTORY_IDS = ImmutableSet.of(
@@ -105,6 +111,9 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     @Inject
     private Client client;
+
+    @Inject
+    private ChatboxPanelManager chatboxPanelManager;
 
     @Inject
     private Notifier notifier;
@@ -141,9 +150,14 @@ public class AnotherBronzemanModePlugin extends Plugin
     private static final String SCRIPT_EVENT_SET_CHATBOX_INPUT = "setChatboxInput";
     private static final String IRONMAN_PREFIX = "<img=" + IconID.IRONMAN.getIndex() + ">";
 
+    private ChatboxTextInput searchInput;
+    private Widget searchButton;
+    private Collection<Widget> itemEntries;
+
     private List<String> namesBronzeman = new ArrayList<>();
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
     private boolean onLeagueWorld;
+    private boolean deleteConfirmed = false;
     private File playerFile;
     private File playerFolder;
 
@@ -190,6 +204,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     protected void shutDown() throws Exception
     {
         super.shutDown();
+        itemEntries = null;
         unlockedItems = null;
         overlayManager.remove(AnotherBronzemanModeOverlay);
         chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
@@ -220,6 +235,10 @@ public class AnotherBronzemanModePlugin extends Plugin
             loadPlayerUnlocks();
             loadResources();
             onLeagueWorld = isLeagueWorld(client.getWorld());
+        }
+        if (e.getGameState() == GameState.LOGIN_SCREEN)
+        {
+            itemEntries = null;
         }
     }
 
@@ -319,6 +338,213 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
     }
 
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded event) {
+        if (event.getGroupId() != COLLECTION_LOG_GROUP_ID) {
+            return;
+        }
+        itemEntries = null;
+        clientThread.invokeLater(() -> {
+            Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
+            Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
+            headerComponents[0].setText("Bronze Man Unlocks");
+            headerComponents[1].setText("Unlocks: <col=ff0000>" + Integer.toString(unlockedItems.size()));
+            if (headerComponents.length > 2) {
+                headerComponents[2].setText("");
+            }
+            createSearchButton(collectionViewHeader);
+
+            Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
+            Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
+            collectionView.deleteAllChildren();
+
+            int index = 0;
+            int x = 0;
+            int y = 0;
+            int yIncrement = 40;
+            int xIncrement = 42;
+            for (Integer itemId : unlockedItems) {
+                addItemToCollectionLog(collectionView, itemId, x, y, index);
+                x = x + xIncrement;
+                index++;
+                if (x > 210) {
+                    x = 0;
+                    y = y + yIncrement;
+                }
+            }
+
+            collectionView.setScrollHeight(y + 3);
+            int scrollHeight = (collectionView.getScrollY() * y) / collectionView.getScrollHeight();
+            collectionView.revalidateScroll();
+            client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar.getId(), collectionView.getId(), scrollHeight);
+            collectionView.setScrollY(0);
+            scrollbar.setScrollY(0);
+        });
+
+    }
+
+    private void createSearchButton(Widget header) {
+        searchButton = header.createChild(-1, WidgetType.GRAPHIC);
+        searchButton.setSpriteId(SpriteID.GE_SEARCH);
+        searchButton.setOriginalWidth(18);
+        searchButton.setOriginalHeight(17);
+        searchButton.setXPositionMode(WidgetPositionMode.ABSOLUTE_RIGHT);
+        searchButton.setOriginalX(5);
+        searchButton.setOriginalY(20);
+        searchButton.setHasListener(true);
+        searchButton.setAction(1, "Open");
+        searchButton.setOnOpListener((JavaScriptCallback) e -> openSearch());
+        searchButton.setName("Search");
+        searchButton.revalidate();
+    }
+
+    private void openSearch() {
+        updateFilter("");
+        client.playSoundEffect(SoundEffectID.UI_BOOP);
+        searchButton.setAction(1, "Close");
+        searchButton.setOnOpListener((JavaScriptCallback) e -> closeSearch());
+        searchInput = chatboxPanelManager.openTextInput("Search unlock list")
+                .onChanged(s -> clientThread.invokeLater(() -> updateFilter(s.trim())))
+                .onClose(() ->
+                {
+                    clientThread.invokeLater(() -> updateFilter(""));
+                    searchButton.setOnOpListener((JavaScriptCallback) e -> openSearch());
+                    searchButton.setAction(1, "Open");
+                })
+                .build();
+    }
+
+    private void closeSearch()
+    {
+        updateFilter("");
+        chatboxPanelManager.close();
+        client.playSoundEffect(SoundEffectID.UI_BOOP);
+    }
+
+    private void updateFilter(String input)
+    {
+        final Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
+
+        if (collectionView == null)
+        {
+            return;
+        }
+
+        String filter = input.toLowerCase();
+        updateList(collectionView, filter);
+    }
+
+    private void updateList(Widget collectionView, String filter)
+    {
+
+        if (itemEntries == null)
+        {
+            itemEntries = Arrays.stream(collectionView.getDynamicChildren())
+                    .sorted(Comparator.comparing(Widget::getRelativeY))
+                    .collect(Collectors.toList());
+        }
+
+        itemEntries.forEach(w -> w.setHidden(true));
+
+        Collection<Widget> matchingItems = itemEntries.stream()
+                .filter(w -> w.getName().toLowerCase().contains(filter))
+                .collect(Collectors.toList());
+
+        int x = 0;
+        int y = 0;
+        for (Widget entry : matchingItems)
+        {
+            entry.setHidden(false);
+            entry.setOriginalY(y);
+            entry.setOriginalX(x);
+            entry.revalidate();
+            x = x + 42;
+            if (x > 210) {
+                x = 0;
+                y = y + 40;
+            }
+        }
+
+        y += 3;
+
+        int newHeight = 0;
+
+        if (collectionView.getScrollHeight() > 0)
+        {
+            newHeight = (collectionView.getScrollY() * y) / collectionView.getScrollHeight();
+        }
+
+        collectionView.setScrollHeight(y);
+        collectionView.revalidateScroll();
+
+        Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
+        client.runScript(
+                ScriptID.UPDATE_SCROLLBAR,
+                scrollbar.getId(),
+                collectionView.getId(),
+                newHeight
+        );
+    }
+
+    private void addItemToCollectionLog(Widget collectionView, Integer itemId, int x, int y, int index) {
+        String itemName = itemManager.getItemComposition(itemId).getName();
+        Widget newItem = collectionView.createChild(index, 5);
+        newItem.setContentType(0);
+        newItem.setItemId(itemId);
+        newItem.setItemQuantity(1);
+        newItem.setItemQuantityMode(0);
+        newItem.setModelId(-1);
+        newItem.setModelType(1);
+        newItem.setSpriteId(-1);
+        newItem.setBorderType(1);
+        newItem.setFilled(false);
+        newItem.setOriginalX(x);
+        newItem.setOriginalY(y);
+        newItem.setOriginalWidth(36);
+        newItem.setOriginalHeight(32);
+        newItem.setHasListener(true);
+        newItem.setAction(1, "Inspect");
+        newItem.setAction(2, "Remove");
+        newItem.setOnOpListener((JavaScriptCallback) e -> handleItemAction(itemId, itemName, e));
+        newItem.setName(itemName);
+        newItem.revalidate();
+    }
+
+    private void handleItemAction(Integer itemId, String itemName, ScriptEvent event) {
+        switch (event.getOp()) {
+            case MENU_INSPECT:
+                final ChatMessageBuilder examination = new ChatMessageBuilder()
+                        .append(ChatColorType.NORMAL)
+                        .append("This is an unlocked item called '" + itemName + "'.");
+
+                chatMessageManager.queue(QueuedMessage.builder()
+                        .type(ChatMessageType.ITEM_EXAMINE)
+                        .runeLiteFormattedMessage(examination.build())
+                        .build());
+                break;
+            case MENU_DELETE:
+                clientThread.invokeLater(() -> confirmDeleteItem(itemId, itemName));
+                break;
+        }
+    }
+
+    private void confirmDeleteItem(Integer itemId, String itemName)
+    {
+        chatboxPanelManager.openTextMenuInput("Do you want to re-lock: " + itemName)
+                .option("1. Confirm re-locking of item", () ->
+                        clientThread.invoke(() ->
+                        {
+                            deleteConfirmed = true;
+                            queueItemDelete(itemId);
+                            sendChatMessage("Item '" + itemName + "' is no longer unlocked.");
+                            deleteConfirmed = false;
+                        })
+                )
+                .option("2. Cancel", Runnables::doNothing)
+                .build();
+    }
+
+
     /** Unlocks all items in the given item container. **/
     public void unlockItemContainerItems(ItemContainer itemContainer)
     {
@@ -352,6 +578,15 @@ public class AnotherBronzemanModePlugin extends Plugin
         unlockedItems.add(itemId);
         AnotherBronzemanModeOverlay.addItemUnlock(itemId);
         savePlayerUnlocks();// Save after every item to fail-safe logging out
+    }
+
+    /** Queues the removal of an unlocked item **/
+    public void queueItemDelete(int itemId)
+    {
+        sendChatMessage("before " + Integer.toString(unlockedItems.size()));
+        unlockedItems.remove(Integer.valueOf(itemId));
+        savePlayerUnlocks(); // Save after every item to fail-safe logging out
+        sendChatMessage("after " + Integer.toString(unlockedItems.size()));
     }
 
     /** Unlocks default items like a bond to a newly made profile **/
