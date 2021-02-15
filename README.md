@@ -35,3 +35,4 @@ This player has only unlocked bronze arrows, so the other items are greyed out a
 - [Initial](https://github.com/sethrem/bronzeman) code written by [Sethrem](https://github.com/sethrem)
 - Code improvements based on the [version](https://github.com/dekvall/bronzeman-mode) made by [Dekvall](https://github.com/dekvall)
 - Unlock-list backup feature and reset unlocks feature written by [Robin Withes](https://github.com/robinwithes)
+- Collection log integration and search functionality written by [Robin Withes](https://github.com/robinwithes)
