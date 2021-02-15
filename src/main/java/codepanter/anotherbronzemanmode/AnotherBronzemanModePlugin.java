@@ -148,7 +148,6 @@ public class AnotherBronzemanModePlugin extends Plugin
     private BufferedImage unlockImage = null;
 
     private static final String SCRIPT_EVENT_SET_CHATBOX_INPUT = "setChatboxInput";
-    private static final String IRONMAN_PREFIX = "<img=" + IconID.IRONMAN.getIndex() + ">";
 
     private ChatboxTextInput searchInput;
     private Widget searchButton;
