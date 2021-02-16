@@ -95,8 +95,8 @@ public class AnotherBronzemanModePlugin extends Plugin
     final int COLLECTION_VIEW_HEADER = 19;
     final int COLLECTION_VIEW_OTHER = 8;
 
-    final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 33;
     final int COLLECTION_VIEW_CATEGORIES_TEXT = 32;
+    final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 33;
     final int COLLECTION_VIEW_CATEGORIES_SCROLLBAR = 28;
 
     final int COLLECTION_LOG_SELECTED_SPRITE_ID = 998;
@@ -520,7 +520,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         newItem.revalidate();
     }
 
-    private void addBronzemanWidget(Widget categories, Widget template, int position, int originalY) {
+    private void makeBronzemanWidget(Widget categories, Widget template, int position, int originalY) {
         Widget bronzemanUnlocks = categories.createChild(position, template.getType());
         bronzemanUnlocks.setText("Bronzeman Unlocks");
         bronzemanUnlocks.setName("<col=ff9040>Bronzeman Unlocks</col>");
@@ -547,6 +547,8 @@ public class AnotherBronzemanModePlugin extends Plugin
         bronzemanUnlocks.setWidthMode(template.getWidthMode());
         bronzemanUnlocks.setYTextAlignment(template.getYTextAlignment());
         bronzemanUnlocks.revalidate();
+        categories.setHeightMode(0);
+        categories.setOriginalHeight(315);
         categories.revalidate();
     }
 
@@ -650,10 +652,7 @@ public class AnotherBronzemanModePlugin extends Plugin
                 .build());
     }
 
-    void addBronzemanRectangle() {
-        Widget logCategories = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_RECTANGLE);
-        Widget[] categoryElements = logCategories.getDynamicChildren();
-
+    void addBronzemanWidget(Widget logCategories, Widget[] categoryElements) {
         if (categoryElements.length == 0) {
             return; // The category elements have not been loaded yet.
         }
@@ -669,7 +668,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
 
         int originalY = categoryElements.length * 15;
-        addBronzemanWidget(logCategories, aerialFishing, categoryElements.length, originalY);
+        makeBronzemanWidget(logCategories, aerialFishing, categoryElements.length, originalY);
 
         Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_SCROLLBAR);
 
@@ -692,53 +691,16 @@ public class AnotherBronzemanModePlugin extends Plugin
         );
     }
 
-    void addBronzemanText() {
-        Widget logCategories = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_TEXT);
-        Widget[] categoryElements = logCategories.getDynamicChildren();
-
-        if (categoryElements.length == 0) {
-            return; // The category elements have not been loaded yet.
-        }
-
-        Widget aerialFishingTwo = categoryElements[0]; // The aerial fishing category is used as a template.
-
-        if (!aerialFishingTwo.getName().contains("Aerial Fishing")) {
-            return; // This is not the 'other' page, as the first element is not 'Aerial Fishing'.
-        }
-
-        if (categoryElements[categoryElements.length - 1].getText().contains("Bronzeman Unlocks")) {
-            return; // The Bronzeman Unlocks category has already been added.
-        }
-
-        int originalY = categoryElements.length * 15;
-        addBronzemanWidget(logCategories, aerialFishingTwo, categoryElements.length, originalY);
-
-        Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_SCROLLBAR);
-
-        int y = originalY + 18;
-
-        int newHeighttwo = 0;
-        if (logCategories.getScrollHeight() > 0)
-        {
-            newHeighttwo = (logCategories.getScrollY() * y) / logCategories.getScrollHeight();
-        }
-
-        logCategories.setScrollHeight(y);
-        logCategories.revalidateScroll();
-
-        client.runScript(
-                ScriptID.UPDATE_SCROLLBAR,
-                scrollbar.getId(),
-                logCategories.getId(),
-                newHeighttwo
-        );
-    }
-
     void addBronzemanCategory()
     {
         clientThread.invokeLater(() -> {
-            addBronzemanRectangle(); // Creates and adds a rectangle widget for the bronzeman category.
-            addBronzemanText(); // Creates and adds a text widget for the bronzeman category.
+            Widget logTexts = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_TEXT);
+            Widget[] textElements = logTexts.getDynamicChildren();
+            addBronzemanWidget(logTexts, textElements); // Creates and adds a text widget for the bronzeman category.
+
+            Widget logRectangles = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_RECTANGLE);
+            Widget[] rectangleElements = logRectangles.getDynamicChildren();
+            addBronzemanWidget(logRectangles, rectangleElements); // Creates and adds a rectangle widget for the bronzeman category.
         });
     }
 
