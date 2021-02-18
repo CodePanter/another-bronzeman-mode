@@ -28,6 +28,9 @@ Talking to fellow Bronzemen with chat icons and everything.
 ![Grand exchange](https://i.imgur.com/lTd0I6P.png)
 This player has only unlocked bronze arrows, so the other items are greyed out and not clickable.
 
+![Collection log](https://i.imgur.com/6ae3Qml.png)
+You can see all your unlocks in the collection log under the 'Other' tab, scrolling all the way down and clicking "Bronzeman Unlocks".
+This interface comes with search functionality, as well as the ability to re-lock an item by right clicking it and selecting "Remove".
 
 ## Credits
 
