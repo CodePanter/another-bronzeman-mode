@@ -75,24 +75,6 @@ import com.google.inject.Provides;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
-
-
-import com.google.common.base.Splitter;
-import com.google.inject.Provides;
-import java.awt.Color;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import javax.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
-
-
-
 @Slf4j
 @PluginDescriptor(
         name = "Another Bronzeman Mode",
@@ -292,8 +274,6 @@ public class AnotherBronzemanModePlugin extends Plugin
         Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
         openBronzemanCategory(collectionViewHeader);
     }
-
-
 
     /** Unlocks all new items that are currently not unlocked **/
     @Subscribe
