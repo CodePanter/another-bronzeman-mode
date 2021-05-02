@@ -682,8 +682,10 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     void updateContainerScroll() {
         Widget categoryContainer = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_CONTAINER);
+        Widget logCategories = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_RECTANGLE);
+        Widget[] categoryElements = logCategories.getDynamicChildren();
         int originalHeight = 315; // 21 elements * 15 height
-        int scrollHeight = 385;
+        int scrollHeight = categoryElements.length * 18;
 
         int newHeight = 0;
         if (categoryContainer.getScrollHeight() > 0 && categoryContainer.getScrollHeight() != scrollHeight)
