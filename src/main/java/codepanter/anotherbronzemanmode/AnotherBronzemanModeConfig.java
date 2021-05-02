@@ -63,10 +63,21 @@ public interface AnotherBronzemanModeConfig extends Config
     }
 
     @ConfigItem(
+        keyName = "moveCollectionLogUnlocks",
+        name = "Move collection log unlocks",
+        description = "Moves the bronzeman mode unlocks to the bottom of the 'Other' tab.",
+        position = 6
+    )
+    default boolean moveCollectionLogUnlocks()
+    {
+        return false;
+    }
+
+    @ConfigItem(
         keyName = "resetCommand",
         name = "Enable reset command",
         description = "Enables the !bmreset command used for wiping your unlocked items.",
-        position = 6
+        position = 7
     )
     default boolean resetCommand()
     {

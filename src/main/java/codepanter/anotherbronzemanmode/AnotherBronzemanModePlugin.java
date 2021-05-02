@@ -264,6 +264,19 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
     }
 
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded e)
+    {
+        if (e.getGroupId() != COLLECTION_LOG_GROUP_ID || config.moveCollectionLogUnlocks()) {
+            return;
+        }
+
+        Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
+        openBronzemanCategory(collectionViewHeader);
+    }
+
+
+
     /** Unlocks all new items that are currently not unlocked **/
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged e)
@@ -280,8 +293,8 @@ public class AnotherBronzemanModePlugin extends Plugin
             killSearchResults();
         }
 
-        if (event.getScriptId() == COLLECTION_LOG_OPEN_OTHER || event.getScriptId() == COLLECTION_LOG_ITEM_CLICK ||
-                event.getScriptId() == COLLECTION_LOG_DRAW_LIST) {
+        if ((event.getScriptId() == COLLECTION_LOG_OPEN_OTHER || event.getScriptId() == COLLECTION_LOG_ITEM_CLICK ||
+                event.getScriptId() == COLLECTION_LOG_DRAW_LIST) && config.moveCollectionLogUnlocks()) {
             addBronzemanCategory();
         }
     }
