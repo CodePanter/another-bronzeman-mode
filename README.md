@@ -8,6 +8,7 @@ When the plugin is enabled for the first time it will unlock all items in your i
 ## Features
 
 - Restricts buying items from the Grand Exchange until that item is obtained through self-sufficient methods.
+- Will disallow trading players depending on your settings.
 - Shows an item unlock graphic every time you obtain an item for the first time.
 - Unlocks are handled per account so you can have multiple bronze-men or not effect the status of your bronze-man accounts.
 - Can optionally take screenshots of all new item unlocks.

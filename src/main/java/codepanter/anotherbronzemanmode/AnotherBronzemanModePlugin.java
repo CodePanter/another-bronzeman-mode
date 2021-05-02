@@ -75,6 +75,24 @@ import com.google.inject.Provides;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
+
+
+import com.google.common.base.Splitter;
+import com.google.inject.Provides;
+import java.awt.Color;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import javax.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
+
+
+
 @Slf4j
 @PluginDescriptor(
         name = "Another Bronzeman Mode",
@@ -203,7 +221,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             if (client.getGameState() == GameState.LOGGED_IN)
             {
                 onLeagueWorld = isLeagueWorld(client.getWorld());
-                // A player can not be a bronze man on a league world.
+                // A player can not be a bronzeman on a league world.
                 if (!onLeagueWorld)
                 {
                     setChatboxName(getNameChatbox());
@@ -300,6 +318,16 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     @Subscribe
+    public void onMenuOptionClicked(MenuOptionClicked event) {
+        if ((event.getMenuOption().equals("Trade with") || event.getMenuOption().equals("Accept trade")) && !config.allowTrading()) {
+            // Scold the player for attempting to trade as a bronzeman
+            event.consume();
+            sendChatMessage("You are a bronzeman. You stand alone...Sort of.");
+            return;
+        }
+    }
+
+    @Subscribe
     public void onScriptCallbackEvent(ScriptCallbackEvent scriptCallbackEvent)
     {
         if (scriptCallbackEvent.getEventName().equals(SCRIPT_EVENT_SET_CHATBOX_INPUT) && !onLeagueWorld)
@@ -372,7 +400,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         clientThread.invokeLater(() -> {
             Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
             Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
-            headerComponents[0].setText("Bronze Man Unlocks");
+            headerComponents[0].setText("Bronzeman Unlocks");
             headerComponents[1].setText("Unlocks: <col=ff0000>" + Integer.toString(unlockedItems.size()));
             if (headerComponents.length > 2) {
                 headerComponents[2].setText("");
@@ -801,7 +829,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /**
-     * Adds the Bronze man Icon in front of player names.
+     * Adds the Bronzeman Icon in front of player names.
      *
      * @param chatMessage chat message to edit sender name on
      */
@@ -810,8 +838,8 @@ public class AnotherBronzemanModePlugin extends Plugin
         String name = chatMessage.getName();
         if (!name.equals(Text.removeTags(name)))
         {
-            // If the name has any tags, no bronze man icon will be added.
-            // This makes it so Iron men can't be flagged as bronze man, but
+            // If the name has any tags, no bronzeman icon will be added.
+            // This makes it so Iron men can't be flagged as bronzeman, but
             // currently also excludes mods.
             return;
         }

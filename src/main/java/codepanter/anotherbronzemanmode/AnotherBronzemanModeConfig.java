@@ -74,10 +74,21 @@ public interface AnotherBronzemanModeConfig extends Config
     }
 
     @ConfigItem(
+        keyName = "allowTrading",
+        name = "Allow trading as a bronzeman",
+        description = "Allows the player to trade even though they are a bronzeman.",
+        position = 7
+    )
+    default boolean allowTrading()
+    {
+        return false;
+    }
+
+    @ConfigItem(
         keyName = "resetCommand",
         name = "Enable reset command",
         description = "Enables the !bmreset command used for wiping your unlocked items.",
-        position = 7
+        position = 8
     )
     default boolean resetCommand()
     {
