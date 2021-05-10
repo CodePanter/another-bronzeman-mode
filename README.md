@@ -7,18 +7,19 @@ When the plugin is enabled for the first time it will unlock all items in your i
 
 ## Required Setup for Group Mode
 In order to properly sync items there is some setup that needs to be done.
-- Make a copy of this [Google Sheet]() to your drive.
-- Get OAuth2 client credentials from Google. Sharing the file with **friends** skip to step 7 after one person creates the client.
-    - Go to https://console.cloud.google.com/home/
-    - Create a new project
-    - Navigate to APIs & Services > Credentials
-    - Click `+ Create Credentials`. Then select create new OAuth client ID.
-    - Choose Application Type: Destktop App. Give it a name, then click create.
-    - Close the prompt and then download the .json file for the OAuth2 client.
-    - Copy the contents of the file into the
+- Make a copy of this [Google Sheet](https://docs.google.com/spreadsheets/d/1Lv042kwyM-ncEzY63ur2T2ePBvaju3Llpo4EgOGu4PQ/) to your drive.
+- Get OAuth2 client credentials from Google. Sharing the file with **friends** skip to step 8. after one person creates the client.
+    1. Go to https://console.cloud.google.com/home/
+    2. Create a new project
+    3. Navigate to APIs & Services > Library, and add the following:
+        - Google Sheets API
+        - Apps Script API
+    4. Navigate to APIs & Services > Credentials
+    5. Click `+ Create Credentials`. Then select create new OAuth client ID.
+    6. Choose Application Type: Destktop App. Give it a name, then click create.
+    7. Close the prompt and then download the .json file for the OAuth2 client.
+    8. Copy the contents of the file into the
         - NOTE: This file contains the client's secret and should NOT be posted publicly, as this is a security risk!
-
-
 
 ## Features
 
