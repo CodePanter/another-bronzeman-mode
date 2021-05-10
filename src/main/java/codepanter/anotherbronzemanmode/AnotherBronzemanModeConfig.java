@@ -112,10 +112,18 @@ public interface AnotherBronzemanModeConfig extends Config
     default String syncSheetId(){return "";}
 
     @ConfigItem(
+            keyName = "oAuth2ClientDetails",
+            name = "Google Sheet OAuth2 client details",
+            description = "This is the file contents of the client details from Google Cloud Platform.",
+            position = 11
+    )
+    default String oAuth2ClientDetails(){return "";}
+
+    @ConfigItem(
             keyName = "authorize",
             name = "Google Sheet Authorize",
             description = "Toggle this to do authorization.",
-            position = 11
+            position = 12
     )
     default boolean authorize(){return false;}
 }

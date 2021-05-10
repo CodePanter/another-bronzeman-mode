@@ -1,9 +1,24 @@
-# Another Bronzeman Mode RuneLite Plugin
-This plugin implements the custom gamemode called 'Bronzeman mode'.
+# Another Bronzeman Mode - Group RuneLite Plugin
+This plugin is a fork of [Another Bronzeman Mode](https://github.com/CodePanter/another-bronzeman-mode) that implements the custom gamemode called 'Bronzeman mode' but includes a group mode which will sync item unlocks between players.
 The idea of this gamemode lies somewhere between a 'normal' account and an 'Ironman' account; as you can't buy an item on the Grand Exchange until you have obtained that item through other means, such as getting it as a drop or buying it in a shop.
 
 The plugin enforces this rule by keeping track of all items you acquire, and only allowing you to buy this item.
 When the plugin is enabled for the first time it will unlock all items in your inventory, as well as unlock all items in your bank the next time you open it.
+
+## Required Setup for Group Mode
+In order to properly sync items there is some setup that needs to be done.
+- Make a copy of this [Google Sheet]() to your drive.
+- Get OAuth2 client credentials from Google. Sharing the file with **friends** skip to step 7 after one person creates the client.
+    - Go to https://console.cloud.google.com/home/
+    - Create a new project
+    - Navigate to APIs & Services > Credentials
+    - Click `+ Create Credentials`. Then select create new OAuth client ID.
+    - Choose Application Type: Destktop App. Give it a name, then click create.
+    - Close the prompt and then download the .json file for the OAuth2 client.
+    - Copy the contents of the file into the
+        - NOTE: This file contains the client's secret and should NOT be posted publicly, as this is a security risk!
+
+
 
 ## Features
 

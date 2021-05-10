@@ -74,6 +74,7 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
@@ -800,16 +801,19 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
     private static final List<String> SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS);
-    private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
+    //private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
     private static final String TOKENS_DIRECTORY_PATH = "tokens";
 
     private void authorizactionCodeFlow() throws IOException, GeneralSecurityException {
         final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
         // Load client secrets.
-        InputStream in = AnotherBronzemanModePlugin.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+
+        /*InputStream in = AnotherBronzemanModePlugin.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
         if (in == null) {
             throw new FileNotFoundException("Resource not found: " + CREDENTIALS_FILE_PATH);
-        }
+        }*/
+
+        InputStream in = new ByteArrayInputStream(config.oAuth2ClientDetails().getBytes(StandardCharsets.UTF_8));
 
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
@@ -844,28 +848,36 @@ public class AnotherBronzemanModePlugin extends Plugin
                     credential.refreshToken();
                 }
 
-                SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=a:a&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
-                int row = -1;
+                SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=1:1&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+                int foundColumn = -1;
+                int column = -1;
+                String columnName = "";
                 if (response.valueRanges[0].values != null)
                 {
                     List<String> users = Arrays.asList(response.valueRanges[0].values[0]);
-                    row = users.indexOf(client.getUsername());
+                    column = users.indexOf(client.getUsername());
+                    foundColumn = column;
+                    do
+                    {
+                        int colPart = column % 26;
+                        columnName = (char)('a' + colPart) + columnName;
+                        column = (column / 26);
+                    } while (column-- > 0);
                 }
 
-                if (row == -1)
+                if (foundColumn == -1)
                 {
                     // Set row number for new player
-                    response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=Players&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
-                    int players = Integer.parseInt(response.valueRanges[0].values[0][0]);
-                    row = players + 1;
+                    response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=NewSlot&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+                    columnName = response.valueRanges[0].values[0][0];
                 }
 
                 SheetsPutRequest(
                         String.format(
                                 "https://sheets.googleapis.com/v4/spreadsheets/%s/values/CharacterData!%s:%s?valueInputOption=RAW&access_token=%s",
                                 config.syncSheetId(),
-                                row,
-                                row,
+                                columnName,
+                                columnName,
                                 credential.getAccessToken()),
                         new PlayerDataForSheets(unlockedItems)
                 );
@@ -896,12 +908,13 @@ public class AnotherBronzemanModePlugin extends Plugin
 
         public PlayerDataForSheets(List<Integer> data)
         {
-            values = new String[1][];
-            values[0] = new String[data.size() + 1];
+            values = new String[data.size() + 1][];
+            values[0] = new String[1];
             values[0][0] = client.getUsername();
             for (int c = 0; c < data.size(); c++)
             {
-                values[0][c + 1] = "" + data.get(c);
+                values[c + 1] = new String[1];
+                values[c + 1][0] = "" + data.get(c);
             }
         }
     }
@@ -985,6 +998,10 @@ public class AnotherBronzemanModePlugin extends Plugin
                     unlockedItems.addAll(items.stream().map(Integer::parseInt).collect(Collectors.toList()));
                 }
             }
+
+            Set<Integer> set = new HashSet<Integer>(unlockedItems);
+            unlockedItems.clear();
+            unlockedItems.addAll(set);
         }
         catch (Exception e)
         {
