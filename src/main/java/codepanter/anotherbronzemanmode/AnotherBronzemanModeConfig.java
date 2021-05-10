@@ -85,13 +85,37 @@ public interface AnotherBronzemanModeConfig extends Config
     }
 
     @ConfigItem(
-        keyName = "resetCommand",
-        name = "Enable reset command",
-        description = "Enables the !bmreset command used for wiping your unlocked items.",
-        position = 8
+            keyName = "resetCommand",
+            name = "Enable reset command",
+            description = "Enables the !bmreset command used for wiping your unlocked items.",
+            position = 8
     )
     default boolean resetCommand()
     {
         return false;
     }
+
+    @ConfigItem(
+            keyName = "syncGroup",
+            name = "Enable group syncing",
+            description = "Enables syncing item unlocks with a group by using a shared Google Sheet.",
+            position = 9
+    )
+    default boolean syncGroup(){return false;}
+
+    @ConfigItem(
+            keyName = "syncSheetId",
+            name = "Google Sheet Id",
+            description = "Google Sheet Id for syncing item unlocks",
+            position = 10
+    )
+    default String syncSheetId(){return "";}
+
+    @ConfigItem(
+            keyName = "authorize",
+            name = "Google Sheet Authorize",
+            description = "Toggle this to do authorization.",
+            position = 11
+    )
+    default boolean authorize(){return false;}
 }

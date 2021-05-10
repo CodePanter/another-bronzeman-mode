@@ -24,8 +24,19 @@
  */
 package codepanter.anotherbronzemanmode;
 
+import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
+import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.common.reflect.TypeToken;
 import com.google.common.util.concurrent.Runnables;
+import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.util.store.FileDataStoreFactory;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -61,10 +72,13 @@ import net.runelite.client.util.ImageUtil;
 import javax.inject.Inject;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.GeneralSecurityException;
 import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.List;
@@ -77,7 +91,7 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 
 @Slf4j
 @PluginDescriptor(
-        name = "Another Bronzeman Mode",
+        name = "Another Bronzeman Mode - Group Mode",
         description = "Limits access to buying an item on the Grand Exchange until it is obtained otherwise.",
         tags = {"overlay", "bronzeman"}
 )
@@ -172,6 +186,8 @@ public class AnotherBronzemanModePlugin extends Plugin
     private boolean deleteConfirmed = false;
     private File playerFile;
     private File playerFolder;
+
+    private Credential credential;
 
     @Provides
     AnotherBronzemanModeConfig provideConfig(ConfigManager configManager)
@@ -368,6 +384,23 @@ public class AnotherBronzemanModePlugin extends Plugin
                 else
                 {
                     chatCommandManager.unregisterCommand(BM_RESET_STRING);
+                }
+            }
+            else if (event.getKey().equals("syncGroup"))
+            {
+                savePlayerUnlocks();
+                loadPlayerUnlocks();
+                savePlayerUnlocks();
+            }
+            else if (event.getKey().equals("authorize") && config.authorize())
+            {
+                try
+                {
+                    authorizactionCodeFlow();
+                }
+                catch (Exception ex)
+                {
+                    ex.printStackTrace();
                 }
             }
         }
@@ -765,6 +798,31 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
     }
 
+    private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
+    private static final List<String> SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS);
+    private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
+    private static final String TOKENS_DIRECTORY_PATH = "tokens";
+
+    private void authorizactionCodeFlow() throws IOException, GeneralSecurityException {
+        final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+        // Load client secrets.
+        InputStream in = AnotherBronzemanModePlugin.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+        if (in == null) {
+            throw new FileNotFoundException("Resource not found: " + CREDENTIALS_FILE_PATH);
+        }
+
+        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+
+        // Build flow and trigger user authorization request.
+        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
+                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+                .setAccessType("offline")
+                .build();
+        LocalServerReceiver receiver = new LocalServerReceiver.Builder().setPort(8888).build();
+        credential = new AuthorizationCodeInstalledApp(flow, receiver).authorize(client.getUsername());
+    }
+
     /* Saves players unlock JSON to a .txt file every time they unlock a new item */
     private void savePlayerUnlocks()
     {
@@ -774,10 +832,127 @@ public class AnotherBronzemanModePlugin extends Plugin
             String json = GSON.toJson(unlockedItems);
             w.println(json);
             w.close();
+
+            if (config.syncGroup())
+            {
+                if (credential == null)
+                {
+                    authorizactionCodeFlow();
+                }
+                else if (credential.getExpiresInSeconds() < 300)
+                {
+                    credential.refreshToken();
+                }
+
+                SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=a:a&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+                int row = -1;
+                if (response.valueRanges[0].values != null)
+                {
+                    List<String> users = Arrays.asList(response.valueRanges[0].values[0]);
+                    row = users.indexOf(client.getUsername());
+                }
+
+                if (row == -1)
+                {
+                    // Set row number for new player
+                    response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=Players&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+                    int players = Integer.parseInt(response.valueRanges[0].values[0][0]);
+                    row = players + 1;
+                }
+
+                SheetsPutRequest(
+                        String.format(
+                                "https://sheets.googleapis.com/v4/spreadsheets/%s/values/CharacterData!%s:%s?valueInputOption=RAW&access_token=%s",
+                                config.syncSheetId(),
+                                row,
+                                row,
+                                credential.getAccessToken()),
+                        new PlayerDataForSheets(unlockedItems)
+                );
+            }
         }
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    class SheetsBatchGet
+    {
+        public String spreadsheetId;
+        public ValueRanges[] valueRanges;
+    }
+
+    class ValueRanges
+    {
+        public String range;
+        public String majorDimension;
+        public String[][] values;
+    }
+
+    class PlayerDataForSheets
+    {
+        public String[][] values;
+
+        public PlayerDataForSheets(List<Integer> data)
+        {
+            values = new String[1][];
+            values[0] = new String[data.size() + 1];
+            values[0][0] = client.getUsername();
+            for (int c = 0; c < data.size(); c++)
+            {
+                values[0][c + 1] = "" + data.get(c);
+            }
+        }
+    }
+
+    private SheetsBatchGet SheetsRequest(String resource)
+    {
+        try {
+            URL url = new URL(resource);
+            HttpURLConnection connection = null;
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            BufferedReader rd = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String payload = "";
+            String line;
+            while ((line = rd.readLine()) != null) {
+                payload += line + "\n";
+            }
+            rd.close();
+            return GSON.fromJson(payload, SheetsBatchGet.class);
+        }
+        catch(Exception ex)
+        {
+            System.out.println(ex.getMessage());
+            return null;
+        }
+    }
+
+    private void SheetsPutRequest(String resource, PlayerDataForSheets data)
+    {
+        try {
+            URL url = new URL(resource);
+            HttpURLConnection connection = null;
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("PUT");
+            connection.setDoOutput(true);
+            BufferedWriter wd = new BufferedWriter(new OutputStreamWriter(connection.getOutputStream()));
+            String jsonBody = GSON.toJson(data);
+            wd.write(jsonBody);
+            wd.flush();
+            BufferedReader rd = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String payload = "";
+            String line;
+            while ((line = rd.readLine()) != null) {
+                payload += line + "\n";
+            }
+            rd.close();
+            wd.close();
+        }
+        catch(Exception ex)
+        {
+            System.out.println(ex.getMessage());
         }
     }
 
@@ -788,7 +963,28 @@ public class AnotherBronzemanModePlugin extends Plugin
         try
         {
             String json = new Scanner(playerFile).useDelimiter("\\Z").next();
-            unlockedItems.addAll(GSON.fromJson(json, new TypeToken<List<Integer>>(){}.getType()));
+            unlockedItems.addAll(GSON.fromJson(json, new TypeToken<List<Integer>>() {
+            }.getType()));
+
+            if (config.syncGroup())
+            {
+                if (credential == null)
+                {
+                    authorizactionCodeFlow();
+                }
+                else if (credential.getExpiresInSeconds() < 300)
+                {
+                    credential.refreshToken();
+                }
+
+                SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=COLUMNS&ranges=Rollups!c:c&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+
+                if (response.valueRanges[0].values != null)
+                {
+                    List<String> items = Arrays.asList(response.valueRanges[0].values[0]);
+                    unlockedItems.addAll(items.stream().map(Integer::parseInt).collect(Collectors.toList()));
+                }
+            }
         }
         catch (Exception e)
         {
