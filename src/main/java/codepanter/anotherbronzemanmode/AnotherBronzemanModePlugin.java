@@ -189,6 +189,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     private File playerFolder;
 
     private Credential credential;
+    private Timer syncTimer;
 
     @Provides
     AnotherBronzemanModeConfig provideConfig(ConfigManager configManager)
@@ -392,6 +393,27 @@ public class AnotherBronzemanModePlugin extends Plugin
                 savePlayerUnlocks();
                 loadPlayerUnlocks();
                 savePlayerUnlocks();
+
+                if (config.syncGroup())
+                {
+                    if (syncTimer == null) {
+                        syncTimer = new Timer();
+                    }
+                    syncTimer.cancel();
+                    TimerTask task = new TimerTask() {
+                        @Override
+                        public void run() {
+                            sendChatMessage("Syncing Bronzeman Unlocks");
+                            loadPlayerUnlocks();
+                            savePlayerUnlocks();
+                        }
+                    };
+                    syncTimer.scheduleAtFixedRate(task,5 * 60 * 1000, 5 * 60 * 1000);
+                }
+                else
+                {
+                    syncTimer.cancel();
+                }
             }
             else if (event.getKey().equals("authorize") && config.authorize())
             {
