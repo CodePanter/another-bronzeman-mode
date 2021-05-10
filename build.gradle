@@ -10,7 +10,7 @@ repositories {
     mavenCentral()
 }
 
-def runeLiteVersion = '1.7.7-SNAPSHOT'
+def runeLiteVersion = '1.7.6'
 
 dependencies {
     compile 'com.google.api-client:google-api-client:1.30.4'

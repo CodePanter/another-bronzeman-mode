@@ -979,6 +979,8 @@ public class AnotherBronzemanModePlugin extends Plugin
             unlockedItems.addAll(GSON.fromJson(json, new TypeToken<List<Integer>>() {
             }.getType()));
 
+            Set<Integer> previousItems = new HashSet<>(unlockedItems);
+
             if (config.syncGroup())
             {
                 if (credential == null)
@@ -995,13 +997,19 @@ public class AnotherBronzemanModePlugin extends Plugin
                 if (response.valueRanges[0].values != null)
                 {
                     List<String> items = Arrays.asList(response.valueRanges[0].values[0]);
-                    unlockedItems.addAll(items.stream().map(Integer::parseInt).collect(Collectors.toList()));
+                    Set<Integer> newItems = new HashSet<Integer>(items.stream().map(Integer::parseInt).collect(Collectors.toList()));
+                    newItems.removeAll(previousItems);
+                    for (Integer item:newItems)
+                    {
+                        AnotherBronzemanModeOverlay.addItemUnlock(item);
+                    }
+                    unlockedItems.addAll(newItems);
                 }
             }
 
-            Set<Integer> set = new HashSet<Integer>(unlockedItems);
-            unlockedItems.clear();
-            unlockedItems.addAll(set);
+            //Set<Integer> set = new HashSet<Integer>(unlockedItems);
+            //unlockedItems.clear();
+            //unlockedItems.addAll(set);
         }
         catch (Exception e)
         {
