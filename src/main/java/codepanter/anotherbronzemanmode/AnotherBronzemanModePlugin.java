@@ -283,6 +283,10 @@ public class AnotherBronzemanModePlugin extends Plugin
         {
             setupPlayerFile();
             loadPlayerUnlocks();
+            if (config.syncGroup())
+            {
+                startTimer();
+            }
         }
     }
 
