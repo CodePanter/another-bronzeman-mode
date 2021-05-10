@@ -265,6 +265,10 @@ public class AnotherBronzemanModePlugin extends Plugin
             loadPlayerUnlocks();
             loadResources();
             onLeagueWorld = isLeagueWorld(client.getWorld());
+            if (config.syncGroup())
+            {
+                startTimer();
+            }
         }
         if (e.getGameState() == GameState.LOGIN_SCREEN)
         {
@@ -396,19 +400,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
                 if (config.syncGroup())
                 {
-                    if (syncTimer == null) {
-                        syncTimer = new Timer();
-                    }
-                    syncTimer.cancel();
-                    TimerTask task = new TimerTask() {
-                        @Override
-                        public void run() {
-                            sendChatMessage("Syncing Bronzeman Unlocks");
-                            loadPlayerUnlocks();
-                            savePlayerUnlocks();
-                        }
-                    };
-                    syncTimer.scheduleAtFixedRate(task,5 * 60 * 1000, 5 * 60 * 1000);
+                    startTimer();
                 }
                 else
                 {
@@ -427,6 +419,23 @@ public class AnotherBronzemanModePlugin extends Plugin
                 }
             }
         }
+    }
+
+    private void startTimer()
+    {
+        if (syncTimer == null) {
+            syncTimer = new Timer();
+        }
+        syncTimer.cancel();
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                sendChatMessage("Syncing Bronzeman Unlocks");
+                loadPlayerUnlocks();
+                savePlayerUnlocks();
+            }
+        };
+        syncTimer.scheduleAtFixedRate(task,5 * 60 * 1000, 5 * 60 * 1000);
     }
 
     private void openBronzemanCategory(Widget widget) {
