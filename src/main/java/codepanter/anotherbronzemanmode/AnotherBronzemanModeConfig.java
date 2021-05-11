@@ -126,4 +126,12 @@ public interface AnotherBronzemanModeConfig extends Config
             position = 12
     )
     default boolean authorize(){return false;}
+
+    @ConfigItem(
+            keyName = "onlyShowLoot",
+            name = "Only shot looted items",
+            description = "",
+            position = 13
+    )
+    default boolean onlyShowLoot(){return false;}
 }
