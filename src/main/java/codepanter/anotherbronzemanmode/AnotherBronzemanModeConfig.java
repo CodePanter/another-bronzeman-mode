@@ -128,10 +128,10 @@ public interface AnotherBronzemanModeConfig extends Config
     default boolean authorize(){return false;}
 
     @ConfigItem(
-            keyName = "onlyShowLoot",
-            name = "Only shot looted items",
-            description = "",
+            keyName = "showBronzemanLoot",
+            name = "Mark your loot to differentiate from Ground Items",
+            description = "This will also track other items of yours, like arrows (and tbd darts, bolts, etc)",
             position = 13
     )
-    default boolean onlyShowLoot(){return false;}
+    default boolean showBronzemanLoot(){return false;}
 }

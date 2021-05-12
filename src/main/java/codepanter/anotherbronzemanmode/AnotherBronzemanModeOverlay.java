@@ -28,14 +28,14 @@ import net.runelite.api.*;
 import net.runelite.api.Point;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.plugins.grounditems.config.DespawnTimerMode;
+import net.runelite.client.plugins.grounditems.GroundItemsConfig;
 import net.runelite.client.plugins.grounditems.config.PriceDisplayMode;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.components.TextComponent;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.ui.overlay.OverlayUtil;
 import net.runelite.client.util.ImageCapture;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
@@ -59,10 +59,11 @@ import static codepanter.anotherbronzemanmode.AnotherBronzemanModePlugin.MAX_QUA
 @Slf4j
 public class AnotherBronzemanModeOverlay extends Overlay
 {
-
+    private ConfigManager configManager;
     private final Client client;
     private final AnotherBronzemanModePlugin plugin;
     private final AnotherBronzemanModeConfig config;
+    private GroundItemsConfig gconfig;
 
     private Integer currentUnlock;
     private long displayTime;
@@ -98,11 +99,12 @@ public class AnotherBronzemanModeOverlay extends Overlay
     private DrawManager drawManager;
 
     @Inject
-    public AnotherBronzemanModeOverlay(Client client, AnotherBronzemanModePlugin plugin, AnotherBronzemanModeConfig config)
+    public AnotherBronzemanModeOverlay(ConfigManager configManager, Client client, AnotherBronzemanModePlugin plugin, AnotherBronzemanModeConfig config)
     {
         super(plugin);
         this.client = client;
         this.config = config;
+        this.gconfig = configManager.getConfig(GroundItemsConfig.class);
         this.plugin = plugin;
         this.itemUnlockList = new ArrayList<>();
         this.screenshotUnlock = false;
@@ -128,10 +130,12 @@ public class AnotherBronzemanModeOverlay extends Overlay
             return null;
         }
 
-
         setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.ABOVE_SCENE);
-        renderGroundItems(graphics);
+        if (config.showBronzemanLoot())
+        {
+            renderGroundItems(graphics);
+        }
         //setPosition(OverlayPosition.TOP_CENTER);
 
         if (itemUnlockList.isEmpty())
@@ -176,6 +180,11 @@ public class AnotherBronzemanModeOverlay extends Overlay
         return null;
     }
 
+    private boolean isDefaultGroundItemTracker(GroundItem item)
+    {
+        return item.getLootType() != LootType.PROJECTILES && item.getLootType() != LootType.WORLD;
+    }
+
     private void renderGroundItems(Graphics2D graphics)
     {
         // Start Item render
@@ -186,27 +195,86 @@ public class AnotherBronzemanModeOverlay extends Overlay
 //        plugin.setHiddenBoxBounds(null);
 //        plugin.setHighlightBoxBounds(null);
 
-        final boolean onlyShowLoot = config.onlyShowLoot();
         Collection<GroundItem> groundItemList = plugin.getCollectedGroundItems().values();
-        final Player player = client.getLocalPlayer();
-        final LocalPoint localLocation = player.getLocalLocation();
 //        final boolean outline = config.textOutline();
         final boolean outline = false;
         //final DespawnTimerMode groundItemTimers = config.groundItemTimers();
         //final boolean outline = config.textOutline();
 
-        for (GroundItem item : groundItemList)
-        {
-            final LocalPoint groundPoint = LocalPoint.fromWorld(client, item.getLocation());
 
-            if (groundPoint == null || localLocation.distanceTo(groundPoint) > MAX_DISTANCE
-                    || (onlyShowLoot && !item.isMine()))
+        if (plugin.isHotKeyPressed())
+        {
+            // Make copy of ground items because we are going to modify them here, and the array list supports our
+            // desired behaviour here
+            groundItemList = new ArrayList<>(groundItemList);
+//            final java.awt.Point awtMousePos = new java.awt.Point(mousePos.getX(), mousePos.getY());
+            GroundItem groundItem = null;
+
+//            if (gconfig.onlyShowLoot())
+//            {
+//                groundItemList.stream().filter(item -> item.getLootType() != LootType.PROJECTILES).forEach(item ->
+//                {
+//                    item.setOffset(offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0));
+//                });
+//
+//                groundItemList.stream().filter(item -> item.getLootType() == LootType.PROJECTILES).forEach(item ->
+//                {
+//                    item.setOffset(offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0));
+//                });
+//            }
+//            else
             {
-                continue;
+                groundItemList.stream().forEach(item ->
+                {
+                    item.setOffset(offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0));
+                });
             }
 
-            final Color highlighted = plugin.getHighlighted(new NamedQuantity(item), item.getGePrice(), item.getHaPrice());
-            final Color hidden = plugin.getHidden(new NamedQuantity(item), item.getGePrice(), item.getHaPrice(), item.isTradeable());
+//            if (groundItem != null)
+//            {
+//                groundItemList.remove(groundItem);
+//                groundItemList.add(groundItem);
+////                topGroundItem = groundItem;
+//            }
+        }
+
+        if (gconfig.onlyShowLoot() && !plugin.isHotKeyPressed())
+        {
+            groundItemList.stream().filter(item -> isDefaultGroundItemTracker(item)).forEach(item ->
+            {
+                markBronzemanItem(graphics, item);
+            });
+
+            groundItemList.stream().filter(item -> !isDefaultGroundItemTracker(item)).forEach(item ->
+            {
+                markBronzemanItem(graphics, item);
+            });
+        }
+        else {
+            groundItemList.stream().forEach(item ->
+            {
+                markBronzemanItem(graphics, item);
+            });
+        }
+        // End Item render
+    }
+
+    private void markBronzemanItem(Graphics2D graphics, GroundItem item)
+    {
+        final boolean onlyShowLoot = config.showBronzemanLoot();
+        final Player player = client.getLocalPlayer();
+        final LocalPoint localLocation = player.getLocalLocation();
+        final LocalPoint groundPoint = LocalPoint.fromWorld(client, item.getLocation());
+
+        if (groundPoint == null || localLocation.distanceTo(groundPoint) > MAX_DISTANCE
+                || (onlyShowLoot && !item.isMine()))
+        {
+            return;
+            //continue;
+        }
+
+        final Color highlighted = plugin.getHighlighted(new NamedQuantity(item), item.getGePrice(), item.getHaPrice());
+        final Color hidden = plugin.getHidden(new NamedQuantity(item), item.getGePrice(), item.getHaPrice(), item.isTradeable());
 
 //            if (highlighted == null && !plugin.isHotKeyPressed())
 //            {
@@ -223,92 +291,93 @@ public class AnotherBronzemanModeOverlay extends Overlay
 //                }
 //            }
 
-            final Color color = plugin.getItemColor(highlighted, hidden);
+        final Color color = plugin.getItemColor(highlighted, hidden);
 
-//            if (config.highlightTiles())
-            {
-                final Polygon poly = Perspective.getCanvasTilePoly(client, groundPoint, item.getHeight());
-
-                if (poly != null)
-                {
-                    OverlayUtil.renderPolygon(graphics, poly, Color.white);
-                }
-            }
+////            if (config.highlightTiles())
+//            {
+//                final Polygon poly = Perspective.getCanvasTilePoly(client, groundPoint, item.getHeight());
+//
+//                if (poly != null)
+//                {
+//                    OverlayUtil.renderPolygon(graphics, poly, color);
+//                }
+//            }
 
 //            if (dontShowOverlay)
 //            {
 //                continue;
 //            }
 
-            itemStringBuilder.append(item.getName());
+        itemStringBuilder.append(item.getName());
 
-            if (item.getQuantity() > 1)
+        if (item.getQuantity() > 1)
+        {
+            if (item.getQuantity() >= MAX_QUANTITY)
             {
-                if (item.getQuantity() >= MAX_QUANTITY)
-                {
-                    itemStringBuilder.append(" (Lots!)");
-                }
-                else
-                {
-                    itemStringBuilder.append(" (")
-                            .append(QuantityFormatter.quantityToStackSize(item.getQuantity()))
-                            .append(")");
-                }
+                itemStringBuilder.append(" (Lots!)");
+            }
+            else
+            {
+                itemStringBuilder.append(" (")
+                        .append(QuantityFormatter.quantityToStackSize(item.getQuantity()))
+                        .append(")");
+            }
+        }
+
+        if (gconfig.priceDisplayMode() == PriceDisplayMode.BOTH)
+        {
+            if (item.getGePrice() > 0)
+            {
+                itemStringBuilder.append(" (GE: ")
+                        .append(QuantityFormatter.quantityToStackSize(item.getGePrice()))
+                        .append(" gp)");
             }
 
-//            if (config.priceDisplayMode() == PriceDisplayMode.BOTH)
-//            {
-//                if (item.getGePrice() > 0)
-//                {
-//                    itemStringBuilder.append(" (GE: ")
-//                            .append(QuantityFormatter.quantityToStackSize(item.getGePrice()))
-//                            .append(" gp)");
-//                }
-//
-//                if (item.getHaPrice() > 0)
-//                {
-//                    itemStringBuilder.append(" (HA: ")
-//                            .append(QuantityFormatter.quantityToStackSize(item.getHaPrice()))
-//                            .append(" gp)");
-//                }
-//            }
-//            else if (config.priceDisplayMode() != PriceDisplayMode.OFF)
-//            {
-//                final int price = config.priceDisplayMode() == PriceDisplayMode.GE
-//                        ? item.getGePrice()
-//                        : item.getHaPrice();
-//
-//                if (price > 0)
-//                {
-//                    itemStringBuilder
-//                            .append(" (")
-//                            .append(QuantityFormatter.quantityToStackSize(price))
-//                            .append(" gp)");
-//                }
-//            }
-
-            final String itemString = itemStringBuilder.toString();
-            itemStringBuilder.setLength(0);
-
-            final Point textPoint = Perspective.getCanvasTextLocation(client,
-                    graphics,
-                    groundPoint,
-                    itemString,
-                    item.getHeight() + OFFSET_Z);
-
-            if (textPoint == null)
+            if (item.getHaPrice() > 0)
             {
-                continue;
+                itemStringBuilder.append(" (HA: ")
+                        .append(QuantityFormatter.quantityToStackSize(item.getHaPrice()))
+                        .append(" gp)");
             }
+        }
+        else if (gconfig.priceDisplayMode() != PriceDisplayMode.OFF)
+        {
+            final int price = gconfig.priceDisplayMode() == PriceDisplayMode.GE
+                    ? item.getGePrice()
+                    : item.getHaPrice();
 
-//            final int offset = plugin.isHotKeyPressed()
-//                    ? item.getOffset()
-//                    : offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0);
+            if (price > 0)
+            {
+                itemStringBuilder
+                        .append(" (")
+                        .append(QuantityFormatter.quantityToStackSize(price))
+                        .append(" gp)");
+            }
+        }
 
-            final int offset = offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0);
+        final String itemString = itemStringBuilder.toString();
+        itemStringBuilder.setLength(0);
 
-            final int textX = textPoint.getX();
-            final int textY = textPoint.getY() - (STRING_GAP * offset);
+        final Point textPoint = Perspective.getCanvasTextLocation(client,
+                graphics,
+                groundPoint,
+                itemString,
+                item.getHeight() + OFFSET_Z);
+
+        if (textPoint == null)
+        {
+            return;
+            //continue;
+        }
+
+        final int offset = plugin.isHotKeyPressed()
+                ? item.getOffset()
+                : offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0);
+
+//        final int offset = offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0);
+
+        final int textX = textPoint.getX();
+        final int textY = textPoint.getY() - (STRING_GAP * offset);
 
 //            if (plugin.isHotKeyPressed())
 //            {
@@ -366,8 +435,8 @@ public class AnotherBronzemanModeOverlay extends Overlay
 //                drawRectangle(graphics, itemHighlightBox, topItem && mouseInHighlightBox ? Color.GREEN : color, highlighted != null, false);
 //            }
 
-            // When the hotkey is pressed the hidden/highlight boxes are drawn to the right of the text,
-            // so always draw the pie since it is on the left hand side.
+        // When the hotkey is pressed the hidden/highlight boxes are drawn to the right of the text,
+        // so always draw the pie since it is on the left hand side.
 //            if (groundItemTimers == DespawnTimerMode.PIE || plugin.isHotKeyPressed())
 //            {
 //                drawTimerPieOverlay(graphics, textX, textY, item);
@@ -400,14 +469,11 @@ public class AnotherBronzemanModeOverlay extends Overlay
 //                }
 //            }
 
-            textComponent.setText(itemString);
-            textComponent.setColor(color);
-            textComponent.setOutline(outline);
-            textComponent.setPosition(new java.awt.Point(textX, textY));
-            textComponent.render(graphics);
-        }
-
-        // End Item render
+        textComponent.setText(itemString);
+        textComponent.setColor(Color.orange);
+        //textComponent.setOutline(outline);
+        textComponent.setPosition(new java.awt.Point(textX, textY));
+        textComponent.render(graphics);
     }
 
     /**

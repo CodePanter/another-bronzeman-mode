@@ -30,6 +30,8 @@ enum LootType
     UNKNOWN,
     TABLE,
     DROPPED,
+    PROJECTILES,
+    WORLD,
     PVP,
     PVM;
 }

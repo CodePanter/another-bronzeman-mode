@@ -30,6 +30,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.EvictingQueue;
 import com.google.common.reflect.TypeToken;
 import com.google.common.util.concurrent.Runnables;
@@ -38,11 +39,14 @@ import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInsta
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
+import net.runelite.api.kit.KitType;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.events.PluginChanged;
@@ -51,6 +55,8 @@ import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemStack;
+import net.runelite.client.game.NPCManager;
+import net.runelite.client.input.KeyManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -86,6 +92,7 @@ import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.text.SimpleDateFormat;
@@ -182,6 +189,13 @@ public class AnotherBronzemanModePlugin extends Plugin
     @Getter
     private BufferedImage unlockImage = null;
 
+    @Inject
+    private KeyManager keyManager;
+    @Inject
+    private AnotherBronzemanModeInputListener inputListener;
+    @Getter(AccessLevel.PACKAGE)
+    @Setter(AccessLevel.PACKAGE)
+    private boolean hotKeyPressed;
     @Getter
     private final Map<GroundItem.GroundItemKey, GroundItem> collectedGroundItems = new LinkedHashMap<>();
     private final Queue<Integer> droppedItemQueue = EvictingQueue.create(16); // recently dropped items
@@ -228,6 +242,10 @@ public class AnotherBronzemanModePlugin extends Plugin
         chatCommandManager.registerCommand(BM_COUNT_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_BACKUP_STRING, this::OnUnlocksBackupCommand);
 
+        WorldItemSpawns.populateWorldSpawns(this.itemManager);
+
+        keyManager.registerKeyListener(inputListener);
+
         if (config.resetCommand())
         {
             chatCommandManager.registerCommand(BM_RESET_STRING, this::OnUnlocksResetCommand);
@@ -257,6 +275,9 @@ public class AnotherBronzemanModePlugin extends Plugin
         chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(BM_COUNT_STRING);
         chatCommandManager.unregisterCommand(BM_BACKUP_STRING);
+
+        keyManager.unregisterKeyListener(inputListener);
+
         if (config.resetCommand())
         {
             chatCommandManager.unregisterCommand(BM_RESET_STRING);
@@ -318,8 +339,6 @@ public class AnotherBronzemanModePlugin extends Plugin
         openBronzemanCategory(collectionViewHeader);
     }
 
-
-
     @Subscribe
     public void onNpcLootReceived(NpcLootReceived npcLootReceived)
     {
@@ -348,6 +367,15 @@ public class AnotherBronzemanModePlugin extends Plugin
         {
             existing.setQuantity(existing.getQuantity() + groundItem.getQuantity());
             // The spawn time remains set at the oldest spawn
+        }
+    }
+
+    @Subscribe
+    public void onFocusChanged(FocusChanged focusChanged)
+    {
+        if (!focusChanged.isFocused())
+        {
+            setHotKeyPressed(false);
         }
     }
 
@@ -395,6 +423,99 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
     }
 
+    @Subscribe
+    public void onInteractingChanged(InteractingChanged event)
+    {
+        if (event.getSource() != client.getLocalPlayer())
+        {
+            return;
+        }
+
+        Actor opponent = event.getTarget();
+
+        if (opponent == null)
+        {
+            lastTime = Instant.now();
+            return;
+        }
+
+        lastOpponent = opponent;
+    }
+
+    private static final Duration WAIT = Duration.ofSeconds(5);
+
+    @Getter(AccessLevel.PACKAGE)
+    private Actor lastOpponent;
+
+    @Getter(AccessLevel.PACKAGE)
+    @VisibleForTesting
+    private Instant lastTime;
+
+    @Subscribe
+    public void onGameTick(GameTick gameTick)
+    {
+        if (lastOpponent != null
+                && lastTime != null
+                && client.getLocalPlayer().getInteracting() == null)
+        {
+            if (Duration.between(lastTime, Instant.now()).compareTo(WAIT) > 0)
+            {
+                lastOpponent = null;
+            }
+        }
+    }
+
+    private boolean isProjectile(TileItem item)
+    {
+        final Set<Integer> bows = new HashSet<Integer>(Arrays.asList(new Integer[]{
+                ItemID.SHORTBOW,
+                ItemID.LONGBOW,
+                ItemID.OAK_SHORTBOW,
+                ItemID.OAK_LONGBOW,
+                ItemID.WILLOW_SHORTBOW,
+                ItemID.WILLOW_LONGBOW,
+                ItemID.MAPLE_SHORTBOW,
+                ItemID.MAPLE_LONGBOW,
+                ItemID.YEW_SHORTBOW,
+                ItemID.YEW_LONGBOW,
+                ItemID.MAGIC_SHORTBOW,
+                ItemID.MAGIC_LONGBOW,
+        }));
+
+        PlayerComposition equips = client.getLocalPlayer().getPlayerComposition();
+
+        return isArrow(item)
+                && bows.contains(equips.getEquipmentId(KitType.WEAPON))
+                && item.getId() == client.getItemContainer(InventoryID.EQUIPMENT).getItem(EquipmentInventorySlot.AMMO.getSlotIdx()).getId();
+    }
+
+    private boolean isArrow(TileItem item)
+    {
+        final Set<Integer> arrows = new HashSet<Integer>(Arrays.asList(new Integer[]{
+                ItemID.BRONZE_ARROW,
+                ItemID.BRONZE_ARROWP,
+                ItemID.IRON_ARROW,
+                ItemID.IRON_ARROWP,
+                ItemID.STEEL_ARROW,
+                ItemID.STEEL_ARROWP,
+                ItemID.MITHRIL_ARROW,
+                ItemID.MITHRIL_ARROWP,
+                ItemID.ADAMANT_ARROW,
+                ItemID.ADAMANT_ARROWP,
+                ItemID.RUNE_ARROW,
+                ItemID.RUNE_ARROWP,
+                ItemID.BRONZE_ARROW,
+                ItemID.BRONZE_ARROWP,
+        }));
+
+        return arrows.contains(item.getId());
+    }
+
+    private boolean isNaturalSpawn(WorldPoint point, TileItem item)
+    {
+        return WorldItemSpawns.isNaturalSpawn(point, item);
+    }
+
     private GroundItem buildGroundItem(final Tile tile, final TileItem item)
     {
         // Collect the data for the item
@@ -403,6 +524,9 @@ public class AnotherBronzemanModePlugin extends Plugin
         final int realItemId = itemComposition.getNote() != -1 ? itemComposition.getLinkedNoteId() : itemId;
         final int alchPrice = itemComposition.getHaPrice();
         final boolean dropped = tile.getWorldLocation().equals(client.getLocalPlayer().getWorldLocation()) && droppedItemQueue.remove(itemId);
+        final boolean isNaturalSpawn = isNaturalSpawn(tile.getWorldLocation(), item);
+        final boolean opponentTile = lastOpponent != null && tile.getWorldLocation().distanceTo(lastOpponent.getWorldLocation()) < 3;
+        final boolean projectile = opponentTile && isProjectile(item);
         final boolean table = itemId == lastUsedItem && tile.getItemLayer().getHeight() > 0;
 
         final GroundItem groundItem = GroundItem.builder()
@@ -414,7 +538,7 @@ public class AnotherBronzemanModePlugin extends Plugin
                 .haPrice(alchPrice)
                 .height(tile.getItemLayer().getHeight())
                 .tradeable(itemComposition.isTradeable())
-                .lootType(dropped ? LootType.DROPPED : (table ? LootType.TABLE : LootType.UNKNOWN))
+                .lootType(isNaturalSpawn ? LootType.WORLD : projectile ? LootType.PROJECTILES : dropped ? LootType.DROPPED : (table ? LootType.TABLE : LootType.UNKNOWN))
                 .spawnTime(Instant.now())
                 .stackable(itemComposition.isStackable())
                 .build();
@@ -533,6 +657,30 @@ public class AnotherBronzemanModePlugin extends Plugin
             event.consume();
             sendChatMessage("You are a bronzeman. You stand alone...Sort of.");
             return;
+        }
+
+        if (event.getMenuAction() == MenuAction.ITEM_FIFTH_OPTION)
+        {
+            int itemId = event.getId();
+            // Keep a queue of recently dropped items to better detect
+            // item spawns that are drops
+            droppedItemQueue.add(itemId);
+        }
+        else if (event.getMenuAction() == MenuAction.ITEM_USE_ON_GAME_OBJECT)
+        {
+            final ItemContainer inventory = client.getItemContainer(InventoryID.INVENTORY);
+            if (inventory == null)
+            {
+                return;
+            }
+
+            final Item clickedItem = inventory.getItem(event.getSelectedItemIndex());
+            if (clickedItem == null)
+            {
+                return;
+            }
+
+            lastUsedItem = clickedItem.getId();
         }
     }
 
