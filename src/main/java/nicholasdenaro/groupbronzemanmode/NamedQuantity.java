@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Tomas Slusny <slusnucky@gmail.com>
+ * Copyright (c) 2020, dekvall <https://github.com/dekvall>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,55 +23,20 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package codepanter.anotherbronzemanmode;
+package nicholasdenaro.groupbronzemanmode;
 
-import java.time.Instant;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import lombok.Builder;
-import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
-import net.runelite.api.coords.WorldPoint;
 
-@Data
-@Builder
-class GroundItem
+@Value
+@RequiredArgsConstructor
+class NamedQuantity
 {
-    private int id;
-    private int itemId;
-    private String name;
-    private int quantity;
-    private WorldPoint location;
-    private int height;
-    private int haPrice;
-    private int gePrice;
-    private int offset;
-    private boolean tradeable;
-    @Nonnull
-    private LootType lootType;
-    @Nullable
-    private Instant spawnTime;
-    private boolean stackable;
+    private final String name;
+    private final int quantity;
 
-    int getHaPrice()
+    NamedQuantity(GroundItem groundItem)
     {
-        return haPrice * quantity;
-    }
-
-    int getGePrice()
-    {
-        return gePrice * quantity;
-    }
-
-    boolean isMine()
-    {
-        return lootType != LootType.UNKNOWN;
-    }
-
-    @Value
-    static class GroundItemKey
-    {
-        private int itemId;
-        private WorldPoint location;
+        this(groundItem.getName(), groundItem.getQuantity());
     }
 }

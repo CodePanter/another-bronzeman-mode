@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, dekvall <https://github.com/dekvall>
+ * Copyright (c) 2019, Adam <Adam@sigterm.info>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,20 +23,15 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package codepanter.anotherbronzemanmode;
+package nicholasdenaro.groupbronzemanmode;
 
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-
-@Value
-@RequiredArgsConstructor
-class NamedQuantity
+enum LootType
 {
-    private final String name;
-    private final int quantity;
-
-    NamedQuantity(GroundItem groundItem)
-    {
-        this(groundItem.getName(), groundItem.getQuantity());
-    }
+    UNKNOWN,
+    TABLE,
+    DROPPED,
+    PROJECTILES,
+    WORLD,
+    PVP,
+    PVM;
 }

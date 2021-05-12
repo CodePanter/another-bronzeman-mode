@@ -23,29 +23,27 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package codepanter.anotherbronzemanmode;
+package nicholasdenaro.groupbronzemanmode;
 
-import java.awt.Point;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
-import java.time.Duration;
 import java.time.Instant;
 import javax.inject.Inject;
-import javax.swing.SwingUtilities;
+
 import net.runelite.client.input.KeyListener;
 import net.runelite.client.input.MouseAdapter;
 
-public class AnotherBronzemanModeInputListener extends MouseAdapter implements KeyListener
+public class GroupBronzemanModeInputListener extends MouseAdapter implements KeyListener
 {
     private static final int HOTKEY = KeyEvent.VK_ALT;
 
     private Instant lastPress;
 
     @Inject
-    private AnotherBronzemanModePlugin plugin;
+    private GroupBronzemanModePlugin plugin;
 
     @Inject
-    private AnotherBronzemanModeConfig config;
+    private GroupBronzemanModeConfig config;
 
     @Override
     public void keyTyped(KeyEvent e)

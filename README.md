@@ -1,4 +1,4 @@
-# Another Bronzeman Mode - Group RuneLite Plugin
+# Group Bronzeman Mode - RuneLite Plugin
 This plugin is a fork of [Another Bronzeman Mode](https://github.com/CodePanter/another-bronzeman-mode) that implements the custom gamemode called 'Bronzeman mode' but includes a group mode which will sync item unlocks between players.
 The idea of this gamemode lies somewhere between a 'normal' account and an 'Ironman' account; as you can't buy an item on the Grand Exchange until you have obtained that item through other means, such as getting it as a drop or buying it in a shop.
 

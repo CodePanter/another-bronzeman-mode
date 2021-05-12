@@ -1,17 +1,11 @@
-package codepanter.anotherbronzemanmode;
+package nicholasdenaro.groupbronzemanmode;
 
-import com.google.gson.Gson;
-import jdk.nashorn.internal.objects.annotations.Getter;
-import jdk.nashorn.internal.objects.annotations.Setter;
 import net.runelite.api.TileItem;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.game.ItemManager;
-import net.runelite.http.api.item.ItemPrice;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.Dictionary;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
