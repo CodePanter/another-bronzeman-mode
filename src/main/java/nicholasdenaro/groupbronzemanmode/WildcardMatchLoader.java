@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2019, Adam <Adam@sigterm.info>
- * Copyright (c) 2021, Nicholas Denaro <ndenarodev@gmail.com>
+ * Copyright (c) 2018, Tomas Slusny <slusnucky@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,16 +22,47 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 package nicholasdenaro.groupbronzemanmode;
 
-enum LootType
+import com.google.common.base.Strings;
+import com.google.common.cache.CacheLoader;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import javax.annotation.Nonnull;
+import net.runelite.client.util.WildcardMatcher;
+
+class WildcardMatchLoader extends CacheLoader<NamedQuantity, Boolean>
 {
-    UNKNOWN,
-    TABLE,
-    DROPPED,
-    PROJECTILES,
-    WORLD,
-    PVP,
-    PVM;
+    private final List<ItemThreshold> itemThresholds;
+
+    WildcardMatchLoader(List<String> configEntries)
+    {
+        this.itemThresholds = configEntries.stream()
+                .map(ItemThreshold::fromConfigEntry)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Boolean load(@Nonnull final NamedQuantity key)
+    {
+        if (Strings.isNullOrEmpty(key.getName()))
+        {
+            return false;
+        }
+
+        final String filteredName = key.getName().trim();
+
+        for (final ItemThreshold entry : itemThresholds)
+        {
+            if (WildcardMatcher.matches(entry.getItemName(), filteredName)
+                    && entry.quantityHolds(key.getQuantity()))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

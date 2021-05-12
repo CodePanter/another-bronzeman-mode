@@ -57,3 +57,5 @@ This interface comes with search functionality, as well as the ability to re-loc
 - Code improvements based on the [version](https://github.com/dekvall/bronzeman-mode) made by [Dekvall](https://github.com/dekvall)
 - Unlock-list backup feature and reset unlocks feature written by [Robin Withes](https://github.com/robinwithes)
 - Collection log integration and search functionality written by [Robin Withes](https://github.com/robinwithes)
+Extended credits
+- [Initial](https://github.com/CodePanter/another-bronzeman-mode) code written by [CodePanter](https://github.com/CodePanter)

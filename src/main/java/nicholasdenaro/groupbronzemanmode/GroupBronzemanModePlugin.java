@@ -1,5 +1,8 @@
 /*
+ * Copyright (c) 2017, Aria <aria@ar1as.space>
+ * Copyright (c) 2018, Adam <Adam@sigterm.info>
  * Copyright (c) 2019, CodePanter <https://github.com/codepanter>
+ * Copyright (c) 2021, Nicholas Denaro <ndenarodev@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +34,10 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.EvictingQueue;
+import com.google.common.collect.ImmutableList;
 import com.google.common.reflect.TypeToken;
 import com.google.common.util.concurrent.Runnables;
 import com.google.api.client.auth.oauth2.Credential;
@@ -42,6 +48,7 @@ import com.google.api.client.util.store.FileDataStoreFactory;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
@@ -58,6 +65,14 @@ import net.runelite.client.game.ItemStack;
 import net.runelite.client.input.KeyManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.grounditems.GroundItemsConfig;
+import net.runelite.client.plugins.grounditems.GroundItemsPlugin;
+import static net.runelite.client.plugins.grounditems.config.ItemHighlightMode.OVERLAY;
+import static net.runelite.client.plugins.grounditems.config.MenuHighlightMode.BOTH;
+import static net.runelite.client.plugins.grounditems.config.MenuHighlightMode.NAME;
+import static net.runelite.client.plugins.grounditems.config.MenuHighlightMode.OPTION;
+
+import net.runelite.client.plugins.grounditems.config.MenuHighlightMode;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
@@ -67,6 +82,7 @@ import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.game.chatbox.ChatboxTextInput;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 import net.runelite.client.game.WorldService;
 import net.runelite.http.api.worlds.World;
@@ -78,6 +94,8 @@ import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatCommandManager;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.ImageUtil;
+import static java.lang.Boolean.FALSE;
+import static java.lang.Boolean.TRUE;
 
 import javax.inject.Inject;
 import java.awt.*;
@@ -96,6 +114,9 @@ import java.time.Instant;
 import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
@@ -175,6 +196,9 @@ public class GroupBronzemanModePlugin extends Plugin
     private ChatMessageManager chatMessageManager;
 
     @Inject
+    private ConfigManager configManager;
+
+    @Inject
     private ChatCommandManager chatCommandManager;
 
     @Inject
@@ -192,6 +216,8 @@ public class GroupBronzemanModePlugin extends Plugin
     private KeyManager keyManager;
     @Inject
     private GroupBronzemanModeInputListener inputListener;
+
+    private GroundItemsConfig gconfig;
     @Getter(AccessLevel.PACKAGE)
     @Setter(AccessLevel.PACKAGE)
     private boolean hotKeyPressed;
@@ -199,11 +225,26 @@ public class GroupBronzemanModePlugin extends Plugin
     private final Map<GroundItem.GroundItemKey, GroundItem> collectedGroundItems = new LinkedHashMap<>();
     private final Queue<Integer> droppedItemQueue = EvictingQueue.create(16); // recently dropped items
     private int lastUsedItem;
+    private LoadingCache<NamedQuantity, Boolean> highlightedItems;
+    private LoadingCache<NamedQuantity, Boolean> hiddenItems;
+    private List<PriceHighlight> priceChecks = ImmutableList.of();
     // The game won't send anything higher than this value to the plugin -
     // so we replace any item quantity higher with "Lots" instead.
     static final int MAX_QUANTITY = 65535;
     // ItemID for coins
     private static final int COINS = ItemID.COINS_995;
+    private static final int FIRST_OPTION = MenuAction.GROUND_ITEM_FIRST_OPTION.getId();
+    private static final int SECOND_OPTION = MenuAction.GROUND_ITEM_SECOND_OPTION.getId();
+    private static final int THIRD_OPTION = MenuAction.GROUND_ITEM_THIRD_OPTION.getId(); // this is Take
+    private static final int FOURTH_OPTION = MenuAction.GROUND_ITEM_FOURTH_OPTION.getId();
+    private static final int FIFTH_OPTION = MenuAction.GROUND_ITEM_FIFTH_OPTION.getId();
+    private static final int EXAMINE_ITEM = MenuAction.EXAMINE_ITEM_GROUND.getId();
+    private static final int CAST_ON_ITEM = MenuAction.SPELL_CAST_ON_GROUND_ITEM.getId();
+
+    private static final String TELEGRAB_TEXT = ColorUtil.wrapWithColorTag("Telekinetic Grab", Color.GREEN) + ColorUtil.prependColorTag(" -> ", Color.WHITE);
+
+    @Inject
+    private ScheduledExecutorService executor;
 
     private static final String SCRIPT_EVENT_SET_CHATBOX_INPUT = "setChatboxInput";
 
@@ -213,6 +254,7 @@ public class GroupBronzemanModePlugin extends Plugin
 
     private List<String> namesBronzeman = new ArrayList<>();
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
+    private int bronzemanIndicatorOffset = -1; // offset for bronzeman icon
     private boolean onLeagueWorld;
     private boolean deleteConfirmed = false;
     private File playerFile;
@@ -242,6 +284,8 @@ public class GroupBronzemanModePlugin extends Plugin
         chatCommandManager.registerCommand(BM_BACKUP_STRING, this::OnUnlocksBackupCommand);
 
         WorldItemSpawns.populateWorldSpawns(this.itemManager);
+        this.gconfig = configManager.getConfig(GroundItemsConfig.class);
+        executor.execute(this::reset);
 
         keyManager.registerKeyListener(inputListener);
 
@@ -274,6 +318,14 @@ public class GroupBronzemanModePlugin extends Plugin
         chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(BM_COUNT_STRING);
         chatCommandManager.unregisterCommand(BM_BACKUP_STRING);
+
+        highlightedItems.invalidateAll();
+        highlightedItems = null;
+        hiddenItems.invalidateAll();
+        hiddenItems = null;
+        hiddenItemList = null;
+        highlightedItemsList = null;
+        collectedGroundItems.clear();
 
         keyManager.unregisterKeyListener(inputListener);
 
@@ -310,6 +362,11 @@ public class GroupBronzemanModePlugin extends Plugin
         if (e.getGameState() == GameState.LOGIN_SCREEN)
         {
             itemEntries = null;
+        }
+
+        if (e.getGameState() == GameState.LOADING)
+        {
+            collectedGroundItems.clear();
         }
     }
 
@@ -674,7 +731,16 @@ public class GroupBronzemanModePlugin extends Plugin
                 .haPrice(alchPrice)
                 .height(tile.getItemLayer().getHeight())
                 .tradeable(itemComposition.isTradeable())
-                .lootType(isNaturalSpawn ? LootType.WORLD : projectile ? LootType.PROJECTILES : dropped ? LootType.DROPPED : (table ? LootType.TABLE : LootType.UNKNOWN))
+                .lootType(
+                        isNaturalSpawn ?
+                                LootType.WORLD :
+                                projectile ?
+                                        LootType.PROJECTILES :
+                                        dropped ?
+                                                LootType.DROPPED :
+                                                table ?
+                                                        LootType.TABLE :
+                                                        LootType.UNKNOWN)
                 .spawnTime(Instant.now())
                 .stackable(itemComposition.isStackable())
                 .build();
@@ -689,6 +755,9 @@ public class GroupBronzemanModePlugin extends Plugin
         {
             groundItem.setGePrice(itemManager.getItemPrice(realItemId));
         }
+
+        groundItem.setHidden(getHidden(new NamedQuantity(itemComposition.getName(), item.getQuantity()), groundItem.getGePrice(), groundItem.getHaPrice(), groundItem.isTradeable()) != null);
+
 
         return groundItem;
     }
@@ -735,17 +804,16 @@ public class GroupBronzemanModePlugin extends Plugin
 
     Color getHidden(NamedQuantity item, int gePrice, int haPrice, boolean isTradeable)
     {
-//        final boolean isExplicitHidden = TRUE.equals(hiddenItems.getUnchecked(item));
-//        final boolean isExplicitHighlight = TRUE.equals(highlightedItems.getUnchecked(item));
-//        final boolean canBeHidden = gePrice > 0 || isTradeable || !config.dontHideUntradeables();
-//        final boolean underGe = gePrice < config.getHideUnderValue();
-//        final boolean underHa = haPrice < config.getHideUnderValue();
-//
-//        // Explicit highlight takes priority over implicit hide
-//        return isExplicitHidden || (!isExplicitHighlight && canBeHidden && underGe && underHa)
-//                ? config.hiddenColor()
-//                : null;
-        return null;
+        final boolean isExplicitHidden = TRUE.equals(hiddenItems.getUnchecked(item));
+        final boolean isExplicitHighlight = TRUE.equals(highlightedItems.getUnchecked(item));
+        final boolean canBeHidden = gePrice > 0 || isTradeable || !gconfig.dontHideUntradeables();
+        final boolean underGe = gePrice < gconfig.getHideUnderValue();
+        final boolean underHa = haPrice < gconfig.getHideUnderValue();
+
+        // Explicit highlight takes priority over implicit hide
+        return isExplicitHidden || (!isExplicitHighlight && canBeHidden && underGe && underHa)
+                ? gconfig.hiddenColor()
+                : null;
     }
 
     Color getItemColor(Color highlighted, Color hidden)
@@ -860,8 +928,89 @@ public class GroupBronzemanModePlugin extends Plugin
     }
 
     @Subscribe
+    public void onMenuEntryAdded(MenuEntryAdded event)
+    {
+        if (gconfig.itemHighlightMode() != OVERLAY)
+        {
+            final boolean telegrabEntry = event.getOption().equals("Cast") && event.getTarget().startsWith(TELEGRAB_TEXT) && event.getType() == CAST_ON_ITEM;
+            if (!(event.getOption().equals("Take") && event.getType() == THIRD_OPTION) && !telegrabEntry)
+            {
+                return;
+            }
+
+            final int itemId = event.getIdentifier();
+            final int sceneX = event.getActionParam0();
+            final int sceneY = event.getActionParam1();
+
+            MenuEntry[] menuEntries = client.getMenuEntries();
+            MenuEntry lastEntry = menuEntries[menuEntries.length - 1];
+
+            final WorldPoint worldPoint = WorldPoint.fromScene(client, sceneX, sceneY, client.getPlane());
+            GroundItem.GroundItemKey groundItemKey = new GroundItem.GroundItemKey(itemId, worldPoint);
+            GroundItem groundItem = collectedGroundItems.get(groundItemKey);
+            int quantity = groundItem.getQuantity();
+
+            final int gePrice = groundItem.getGePrice();
+            final int haPrice = groundItem.getHaPrice();
+            final Color hidden = getHidden(new NamedQuantity(groundItem.getName(), quantity), gePrice, haPrice, groundItem.isTradeable());
+            final Color highlighted = getHighlighted(new NamedQuantity(groundItem.getName(), quantity), gePrice, haPrice);
+            final Color color = getItemColor(highlighted, hidden);
+            final boolean canBeRecolored = highlighted != null || (hidden != null && gconfig.recolorMenuHiddenItems());
+
+            if (color != null && canBeRecolored && !color.equals(gconfig.defaultColor()))
+            {
+                final MenuHighlightMode mode = gconfig.menuHighlightMode();
+
+                if (mode == BOTH || mode == OPTION)
+                {
+                    final String optionText = telegrabEntry ? "Cast" : "Take";
+                    lastEntry.setOption(ColorUtil.prependColorTag(optionText, color));
+                }
+
+                if (mode == BOTH || mode == NAME)
+                {
+                    String target = lastEntry.getTarget();
+
+                    if (telegrabEntry)
+                    {
+                        target = target.substring(TELEGRAB_TEXT.length());
+                    }
+
+                    target = ColorUtil.prependColorTag(target.substring(target.indexOf('>') + 1), color);
+
+                    if (telegrabEntry)
+                    {
+                        target = TELEGRAB_TEXT + target;
+                    }
+
+                    lastEntry.setTarget(target);
+                }
+            }
+
+            if (gconfig.showMenuItemQuantities() && groundItem.isStackable() && quantity > 1)
+            {
+                lastEntry.setTarget(lastEntry.getTarget() + " (" + quantity + ")");
+            }
+
+            if (groundItem.isMine())
+            {
+                String target = lastEntry.getTarget();
+                target += "<img=" + bronzemanIndicatorOffset + ">";
+                lastEntry.setTarget(target);
+            }
+
+            client.setMenuEntries(menuEntries);
+        }
+    }
+
+    @Subscribe
     public void onConfigChanged(ConfigChanged event)
     {
+        if (event.getGroup().equals("grounditems"))
+        {
+            executor.execute(this::reset);
+        }
+
         if (event.getGroup().equals(CONFIG_GROUP))
         {
             if (event.getKey().equals("namesBronzeman"))
@@ -910,6 +1059,60 @@ public class GroupBronzemanModePlugin extends Plugin
                 }
             }
         }
+    }
+
+    private List<String> hiddenItemList = new CopyOnWriteArrayList<>();
+    private List<String> highlightedItemsList = new CopyOnWriteArrayList<>();
+
+    @Value
+    static class PriceHighlight
+    {
+        private final int price;
+        private final Color color;
+    }
+
+    private void reset()
+    {
+        // gets the hidden items from the text box in the config
+        hiddenItemList = Text.fromCSV(gconfig.getHiddenItems());
+
+        // gets the highlighted items from the text box in the config
+        highlightedItemsList = Text.fromCSV(gconfig.getHighlightItems());
+
+        highlightedItems = CacheBuilder.newBuilder()
+                .maximumSize(512L)
+                .expireAfterAccess(10, TimeUnit.MINUTES)
+                .build(new WildcardMatchLoader(highlightedItemsList));
+
+        hiddenItems = CacheBuilder.newBuilder()
+                .maximumSize(512L)
+                .expireAfterAccess(10, TimeUnit.MINUTES)
+                .build(new WildcardMatchLoader(hiddenItemList));
+
+        // Cache colors
+        ImmutableList.Builder<PriceHighlight> priceCheckBuilder = ImmutableList.builder();
+
+        if (gconfig.insaneValuePrice() > 0)
+        {
+            priceCheckBuilder.add(new PriceHighlight(gconfig.insaneValuePrice(), gconfig.insaneValueColor()));
+        }
+
+        if (gconfig.highValuePrice() > 0)
+        {
+            priceCheckBuilder.add(new PriceHighlight(gconfig.highValuePrice(), gconfig.highValueColor()));
+        }
+
+        if (gconfig.mediumValuePrice() > 0)
+        {
+            priceCheckBuilder.add(new PriceHighlight(gconfig.mediumValuePrice(), gconfig.mediumValueColor()));
+        }
+
+        if (gconfig.lowValuePrice() > 0)
+        {
+            priceCheckBuilder.add(new PriceHighlight(gconfig.lowValuePrice(), gconfig.lowValueColor()));
+        }
+
+        priceChecks = priceCheckBuilder.build();
     }
 
     private void startTimer()
@@ -1836,14 +2039,21 @@ public class GroupBronzemanModePlugin extends Plugin
             return;
         }
 
+        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 2);
+
         unlockImage = ImageUtil.getResourceStreamFromClass(getClass(), "/item-unlocked.png");
         BufferedImage image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_icon.png");
         IndexedSprite indexedSprite = ImageUtil.getImageIndexedSprite(image, client);
 
         bronzemanIconOffset = modIcons.length;
 
-        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 1);
-        newModIcons[newModIcons.length - 1] = indexedSprite;
+        newModIcons[modIcons.length] = indexedSprite;
+
+        image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_indicator.png");
+        indexedSprite = ImageUtil.getImageIndexedSprite(image, client);
+
+        newModIcons[modIcons.length + 1] = indexedSprite;
+        bronzemanIndicatorOffset = modIcons.length + 1;
 
         client.setModIcons(newModIcons);
     }

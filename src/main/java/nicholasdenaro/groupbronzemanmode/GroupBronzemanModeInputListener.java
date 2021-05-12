@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, Seth <https://github.com/sethtroll>
+ * Copyright (c) 2021, Nicholas Denaro <ndenarodev@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

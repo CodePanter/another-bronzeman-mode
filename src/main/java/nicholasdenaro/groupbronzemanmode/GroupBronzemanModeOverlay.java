@@ -1,5 +1,8 @@
 /*
+ * Copyright (c) 2017, Aria <aria@ar1as.space>
+ * Copyright (c) 2018, Adam <Adam@sigterm.info>
  * Copyright (c) 2019, CodePanter <https://github.com/codepanter>
+ * Copyright (c) 2021, Nicholas Denaro <ndenarodev@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,10 +33,14 @@ import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.grounditems.GroundItemsConfig;
+import net.runelite.client.plugins.grounditems.GroundItemsPlugin;
+import net.runelite.client.plugins.grounditems.config.DespawnTimerMode;
 import net.runelite.client.plugins.grounditems.config.PriceDisplayMode;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.components.TextComponent;
+import net.runelite.client.ui.overlay.components.ImageComponent;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.util.ImageCapture;
@@ -46,12 +53,16 @@ import javax.swing.SwingUtilities;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.QuantityFormatter;
 
 import static nicholasdenaro.groupbronzemanmode.GroupBronzemanModePlugin.MAX_QUANTITY;
@@ -82,6 +93,7 @@ public class GroupBronzemanModeOverlay extends Overlay
     // The 15 pixel gap between each drawn ground item.
     private static final int STRING_GAP = 15;
     private final TextComponent textComponent = new TextComponent();
+    private ImageComponent imageComponent;
 
     @Inject
     private ItemManager itemManager;
@@ -109,6 +121,9 @@ public class GroupBronzemanModeOverlay extends Overlay
         this.itemUnlockList = new ArrayList<>();
         this.screenshotUnlock = false;
         this.includeFrame = false;
+
+        BufferedImage image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_indicator.png");
+        imageComponent = new ImageComponent(image);
     }
 
     public void addItemUnlock(int itemId)
@@ -132,7 +147,7 @@ public class GroupBronzemanModeOverlay extends Overlay
 
         setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.ABOVE_SCENE);
-        if (config.showBronzemanLoot())
+        if (config.markBronzemanLoot())
         {
             renderGroundItems(graphics);
         }
@@ -201,6 +216,7 @@ public class GroupBronzemanModeOverlay extends Overlay
         //final DespawnTimerMode groundItemTimers = config.groundItemTimers();
         //final boolean outline = config.textOutline();
 
+        GroundItem topGroundItem = null;
 
         if (plugin.isHotKeyPressed())
         {
@@ -224,33 +240,80 @@ public class GroupBronzemanModeOverlay extends Overlay
 //            }
 //            else
             {
-                groundItemList.stream().forEach(item ->
+                for (GroundItem item : groundItemList)
                 {
                     item.setOffset(offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0));
-                });
+//                    if (groundItem != null)
+//                    {
+//                        continue;
+//                    }
+//
+//                    if (plugin.getTextBoxBounds() != null
+//                            && item.equals(plugin.getTextBoxBounds().getValue())
+//                            && plugin.getTextBoxBounds().getKey().contains(awtMousePos))
+//                    {
+//                        groundItem = item;
+//                        continue;
+//                    }
+//
+//                    if (plugin.getHiddenBoxBounds() != null
+//                            && item.equals(plugin.getHiddenBoxBounds().getValue())
+//                            && plugin.getHiddenBoxBounds().getKey().contains(awtMousePos))
+//                    {
+//                        groundItem = item;
+//                        continue;
+//                    }
+//
+//                    if (plugin.getHighlightBoxBounds() != null
+//                            && item.equals(plugin.getHighlightBoxBounds().getValue())
+//                            && plugin.getHighlightBoxBounds().getKey().contains(awtMousePos))
+//                    {
+//                        groundItem = item;
+//                    }
+                }
             }
 
-//            if (groundItem != null)
-//            {
-//                groundItemList.remove(groundItem);
-//                groundItemList.add(groundItem);
-////                topGroundItem = groundItem;
-//            }
+            if (groundItem != null)
+            {
+                groundItemList.remove(groundItem);
+                groundItemList.add(groundItem);
+                topGroundItem = groundItem;
+            }
         }
 
-        if (gconfig.onlyShowLoot() && !plugin.isHotKeyPressed())
+        if (!plugin.isHotKeyPressed())
         {
-            groundItemList.stream().filter(item -> isDefaultGroundItemTracker(item)).forEach(item ->
+            if (gconfig.onlyShowLoot())
             {
-                markBronzemanItem(graphics, item);
-            });
+                groundItemList.stream().filter(item -> isDefaultGroundItemTracker(item) && !item.isHidden()).forEach(item ->
+                {
+                    markBronzemanItem(graphics, item);
+                });
 
-            groundItemList.stream().filter(item -> !isDefaultGroundItemTracker(item)).forEach(item ->
+                groundItemList.stream().filter(item -> isDefaultGroundItemTracker(item) && item.isHidden()).forEach(item ->
+                {
+                    markBronzemanItem(graphics, item);
+                });
+
+                groundItemList.stream().filter(item -> !isDefaultGroundItemTracker(item)).forEach(item ->
+                {
+                    markBronzemanItem(graphics, item);
+                });
+            }
+            else
             {
-                markBronzemanItem(graphics, item);
-            });
+                groundItemList.stream().filter(item -> !item.isHidden()).forEach(item ->
+                {
+                    markBronzemanItem(graphics, item);
+                });
+                groundItemList.stream().filter(item -> item.isHidden()).forEach(item ->
+                {
+                    markBronzemanItem(graphics, item);
+                });
+            }
         }
-        else {
+        else
+        {
             groundItemList.stream().forEach(item ->
             {
                 markBronzemanItem(graphics, item);
@@ -261,7 +324,7 @@ public class GroupBronzemanModeOverlay extends Overlay
 
     private void markBronzemanItem(Graphics2D graphics, GroundItem item)
     {
-        final boolean onlyShowLoot = config.showBronzemanLoot();
+        final boolean onlyShowLoot = config.markBronzemanLoot();
         final Player player = client.getLocalPlayer();
         final LocalPoint localLocation = player.getLocalLocation();
         final LocalPoint groundPoint = LocalPoint.fromWorld(client, item.getLocation());
@@ -276,20 +339,27 @@ public class GroupBronzemanModeOverlay extends Overlay
         final Color highlighted = plugin.getHighlighted(new NamedQuantity(item), item.getGePrice(), item.getHaPrice());
         final Color hidden = plugin.getHidden(new NamedQuantity(item), item.getGePrice(), item.getHaPrice(), item.isTradeable());
 
-//            if (highlighted == null && !plugin.isHotKeyPressed())
+        item.setHidden(hidden != null);
+
+        if (/* config.hideHiddenGroundItems() && */item.isHidden() && !plugin.isHotKeyPressed())
+        {
+            return;
+        }
+
+        if (highlighted == null && !plugin.isHotKeyPressed())
+        {
+//            // Do not display hidden items
+//            if (hidden != null)
 //            {
-//                // Do not display hidden items
-//                if (hidden != null)
-//                {
-//                    continue;
-//                }
-//
-//                // Do not display non-highlighted items
-//                if (config.showHighlightedOnly())
-//                {
-//                    continue;
-//                }
+//                return;
 //            }
+
+//            // Do not display non-highlighted items
+//            if (config.showHighlightedOnly())
+//            {
+//                return;
+//            }
+        }
 
         final Color color = plugin.getItemColor(highlighted, hidden);
 
@@ -378,6 +448,11 @@ public class GroupBronzemanModeOverlay extends Overlay
 
         final int textX = textPoint.getX();
         final int textY = textPoint.getY() - (STRING_GAP * offset);
+
+        if (!isDefaultGroundItemTracker(item) || !item.isHidden() || plugin.isHotKeyPressed())
+        {
+            drawBronzemanIconOverlay(graphics, textX, textY, item);
+        }
 
 //            if (plugin.isHotKeyPressed())
 //            {
@@ -469,11 +544,138 @@ public class GroupBronzemanModeOverlay extends Overlay
 //                }
 //            }
 
-        textComponent.setText(itemString);
-        textComponent.setColor(Color.orange);
-        //textComponent.setOutline(outline);
-        textComponent.setPosition(new java.awt.Point(textX, textY));
-        textComponent.render(graphics);
+        if (!isDefaultGroundItemTracker(item))
+        {
+            textComponent.setText(itemString);
+            textComponent.setColor(color);
+            //textComponent.setOutline(outline);
+            textComponent.setPosition(new java.awt.Point(textX, textY));
+            textComponent.render(graphics);
+        }
+    }
+
+
+    private void drawBronzemanIconOverlay(Graphics2D graphics, int textX, int textY, GroundItem item)
+    {
+        Instant now = Instant.now();
+        Instant spawnTime = item.getSpawnTime();
+        Instant despawnTime = calculateDespawnTime(item);
+//        Color fillColor = getItemTimerColor(groundItem);
+
+        boolean shiftIcon = true;
+        if (spawnTime == null || despawnTime == null)
+        {
+            shiftIcon = false;
+        }
+
+        // Shift over to not be on top of the text
+        int x = textX - 14 - (gconfig.groundItemTimers() == DespawnTimerMode.PIE && shiftIcon ? 16 : 0);
+        int y = textY - 12;
+        imageComponent.setPreferredLocation(new java.awt.Point(x, y));
+        imageComponent.render(graphics);
+    }
+
+    private static final Duration DESPAWN_TIME_INSTANCE = Duration.ofMinutes(30);
+    private static final Duration DESPAWN_TIME_LOOT = Duration.ofMinutes(2);
+    private static final Duration DESPAWN_TIME_DROP = Duration.ofMinutes(3);
+    private static final Duration DESPAWN_TIME_TABLE = Duration.ofMinutes(10);
+    private static final int KRAKEN_REGION = 9116;
+    private static final int KBD_NMZ_REGION = 9033;
+    private static final int ZILYANA_REGION = 11602;
+    private static final int GRAARDOR_REGION = 11347;
+    private static final int KRIL_TSUTSAROTH_REGION = 11603;
+    private static final int KREEARRA_REGION = 11346;
+    private static final int NIGHTMARE_REGION = 15515;
+    private Instant calculateDespawnTime(GroundItem groundItem)
+    {
+        // We can only accurately guess despawn times for our own pvm loot, dropped items,
+        // and items we placed on tables
+        if (groundItem.getLootType() != LootType.PVM
+                && groundItem.getLootType() != LootType.DROPPED
+                && groundItem.getLootType() != LootType.TABLE)
+        {
+            return null;
+        }
+
+        // Loot appears to others after 1 minute, and despawns after 2 minutes
+        // Dropped items appear to others after 1 minute, and despawns after 3 minutes
+        // Items in instances never appear to anyone and despawn after 30 minutes
+
+        Instant spawnTime = groundItem.getSpawnTime();
+        if (spawnTime == null)
+        {
+            return null;
+        }
+
+        final Instant despawnTime;
+        Instant now = Instant.now();
+        if (client.isInInstancedRegion())
+        {
+            final int playerRegionID = WorldPoint.fromLocalInstance(client, client.getLocalPlayer().getLocalLocation()).getRegionID();
+            if (playerRegionID == KRAKEN_REGION)
+            {
+                // Items in the Kraken instance never despawn
+                return null;
+            }
+            else if (playerRegionID == KBD_NMZ_REGION)
+            {
+                // NMZ and the KBD lair uses the same region ID but NMZ uses planes 1-3 and KBD uses plane 0
+                if (client.getLocalPlayer().getWorldLocation().getPlane() == 0)
+                {
+                    // Items in the KBD instance use the standard despawn timer
+                    despawnTime = spawnTime.plus(groundItem.getLootType() == LootType.DROPPED
+                            ? DESPAWN_TIME_DROP
+                            : DESPAWN_TIME_LOOT);
+                }
+                else
+                {
+                    if (groundItem.getLootType() == LootType.DROPPED)
+                    {
+                        // Dropped items in the NMZ instance never despawn
+                        return null;
+                    }
+                    else
+                    {
+                        despawnTime = spawnTime.plus(DESPAWN_TIME_LOOT);
+                    }
+                }
+            }
+            else if (playerRegionID == ZILYANA_REGION || playerRegionID == GRAARDOR_REGION ||
+                    playerRegionID == KRIL_TSUTSAROTH_REGION || playerRegionID == KREEARRA_REGION || playerRegionID == NIGHTMARE_REGION)
+            {
+                // GWD and Nightmare instances use the normal despawn timers
+                despawnTime = spawnTime.plus(groundItem.getLootType() == LootType.DROPPED
+                        ? DESPAWN_TIME_DROP
+                        : DESPAWN_TIME_LOOT);
+            }
+            else
+            {
+                despawnTime = spawnTime.plus(DESPAWN_TIME_INSTANCE);
+            }
+        }
+        else
+        {
+            switch (groundItem.getLootType())
+            {
+                case DROPPED:
+                    despawnTime = spawnTime.plus(DESPAWN_TIME_DROP);
+                    break;
+                case TABLE:
+                    despawnTime = spawnTime.plus(DESPAWN_TIME_TABLE);
+                    break;
+                default:
+                    despawnTime = spawnTime.plus(DESPAWN_TIME_LOOT);
+                    break;
+            }
+        }
+
+        if (now.isBefore(spawnTime) || now.isAfter(despawnTime))
+        {
+            // that's weird
+            return null;
+        }
+
+        return despawnTime;
     }
 
     /**
