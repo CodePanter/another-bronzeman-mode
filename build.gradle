@@ -10,9 +10,12 @@ repositories {
     mavenCentral()
 }
 
-def runeLiteVersion = '1.7.7-SNAPSHOT'
+def runeLiteVersion = '1.7.7'
 
 dependencies {
+    compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
+    compile 'com.google.apis:google-api-services-sheets:v4-rev575-1.23.0'
+
     compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
 
     compileOnly 'org.projectlombok:lombok:1.18.4'
@@ -25,10 +28,19 @@ dependencies {
     }
 }
 
-group = 'codepanter.anotherbronzemanmode'
-version = '1.1-SNAPSHOT'
+group = 'nicholasdenaro.groupbronzemanmode'
+version = '1.0'
 sourceCompatibility = '1.8'
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
+}
+
+jar {
+    manifest {
+        attributes "Main-Class": "nicholasdenaro.groupbronzemanmode.GroupBronzemanModePluginTest"
+    }
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
 }
