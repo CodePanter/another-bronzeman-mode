@@ -339,49 +339,6 @@ public class GroundItemTracker
             final WorldPoint worldPoint = WorldPoint.fromScene(client, sceneX, sceneY, client.getPlane());
             GroundItem.GroundItemKey groundItemKey = new GroundItem.GroundItemKey(itemId, worldPoint);
             GroundItem groundItem = collectedGroundItems.get(groundItemKey);
-            int quantity = groundItem.getQuantity();
-
-            final int gePrice = groundItem.getGePrice();
-            final int haPrice = groundItem.getHaPrice();
-            final Color hidden = getHidden(new NamedQuantity(groundItem.getName(), quantity), gePrice, haPrice, groundItem.isTradeable());
-            final Color highlighted = getHighlighted(new NamedQuantity(groundItem.getName(), quantity), gePrice, haPrice);
-            final Color color = getItemColor(highlighted, hidden);
-            final boolean canBeRecolored = highlighted != null || (hidden != null && gconfig.recolorMenuHiddenItems());
-
-            if (color != null && canBeRecolored && !color.equals(gconfig.defaultColor()))
-            {
-                final MenuHighlightMode mode = gconfig.menuHighlightMode();
-
-                if (mode == BOTH || mode == OPTION)
-                {
-                    final String optionText = telegrabEntry ? "Cast" : "Take";
-                    lastEntry.setOption(ColorUtil.prependColorTag(optionText, color));
-                }
-
-                if (mode == BOTH || mode == NAME)
-                {
-                    String target = lastEntry.getTarget();
-
-                    if (telegrabEntry)
-                    {
-                        target = target.substring(TELEGRAB_TEXT.length());
-                    }
-
-                    target = ColorUtil.prependColorTag(target.substring(target.indexOf('>') + 1), color);
-
-                    if (telegrabEntry)
-                    {
-                        target = TELEGRAB_TEXT + target;
-                    }
-
-                    lastEntry.setTarget(target);
-                }
-            }
-
-            if (gconfig.showMenuItemQuantities() && groundItem.isStackable() && quantity > 1)
-            {
-                lastEntry.setTarget(lastEntry.getTarget() + " (" + quantity + ")");
-            }
 
             if (groundItem.isMine())
             {
