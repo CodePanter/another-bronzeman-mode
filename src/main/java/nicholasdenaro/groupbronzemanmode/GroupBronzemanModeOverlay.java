@@ -149,8 +149,6 @@ public class GroupBronzemanModeOverlay extends Overlay
             renderGroundItems(graphics);
         }
 
-        setPosition(OverlayPosition.TOP_CENTER);
-
         if (itemUnlockList.isEmpty())
         {
             return null;
@@ -170,8 +168,8 @@ public class GroupBronzemanModeOverlay extends Overlay
         }
 
         // Drawing unlock pop-up at the top of the screen.
-        graphics.drawImage(plugin.getUnlockImage(),-62, displayY, null);
-        graphics.drawImage(itemManager.getImage(currentUnlock, 1, false),-50, displayY + 7, null);
+        graphics.drawImage(plugin.getUnlockImage(),client.getCanvasWidth() / 2 - 62, displayY, null);
+        graphics.drawImage(itemManager.getImage(currentUnlock, 1, false),client.getCanvasWidth() / 2 - 50, displayY + 7, null);
         if (displayY < 10)
         {
             displayY = displayY + 1;
@@ -191,8 +189,6 @@ public class GroupBronzemanModeOverlay extends Overlay
             currentUnlock = null;
         }
 
-        setPosition(OverlayPosition.DYNAMIC);
-        setLayer(OverlayLayer.ABOVE_SCENE);
         return null;
     }
 

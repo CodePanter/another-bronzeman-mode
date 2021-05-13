@@ -36,7 +36,12 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.client.chat.ChatColorType;
+import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 
 import javax.inject.Inject;
 import java.io.*;
@@ -45,6 +50,9 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
@@ -61,35 +69,89 @@ public class GoogleSheetsSyncer
 
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
     private static final List<String> SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS);
-    //private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
     private static final String TOKENS_DIRECTORY_PATH = "tokens";
 
-    public void authorizactionCodeFlow() throws IOException, GeneralSecurityException {
-        final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-        // Load client secrets.
-        InputStream in = new ByteArrayInputStream(config.oAuth2ClientDetails().getBytes(StandardCharsets.UTF_8));
+    @Inject
+    private ScheduledExecutorService executor;
 
-        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+    @Inject
+    private ChatMessageManager chatMessageManager;
 
-        // Build flow and trigger user authorization request.
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-                .setAccessType("offline")
+    private boolean refreshStarted;
+
+    private GroupBronzemanModePlugin plugin;
+
+    public void authorize(GroupBronzemanModePlugin plugin)
+    {
+        executor.execute(this::authorizactionCodeFlow);
+        this.plugin = plugin;
+    }
+
+    private void authorizactionCodeFlow()
+    {
+        try {
+            final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+            // Load client secrets.
+            InputStream in = new ByteArrayInputStream(plugin.getOAuth2ClientDetails().getBytes(StandardCharsets.UTF_8));
+
+            GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+
+            // Build flow and trigger user authorization request.
+            GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                    HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
+                    .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+                    .setAccessType("offline")
+                    .build();
+            LocalServerReceiver receiver = new LocalServerReceiver.Builder().setPort(8888).build();
+            credential = new AuthorizationCodeInstalledApp(flow, receiver).authorize(client.getUsername());
+            sendChatMessage("Authorization completed successfully.");
+
+            if (!refreshStarted)
+            {
+                executor.schedule(() -> {
+                    refreshToken();
+                }, 30, TimeUnit.MINUTES);
+            }
+        }
+        catch (Exception ex)
+        {
+            sendChatMessage("Authorization failed.");
+        }
+    }
+
+    public void refreshToken()
+    {
+        try
+        {
+            credential.refreshToken();
+            sendChatMessage("Refresh Google client token completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            sendChatMessage("Unable to refresh Google client token.");
+        }
+    }
+
+    private void sendChatMessage(String chatMessage)
+    {
+        final String message = new ChatMessageBuilder()
+                .append(ChatColorType.HIGHLIGHT)
+                .append(chatMessage)
                 .build();
-        LocalServerReceiver receiver = new LocalServerReceiver.Builder().setPort(8888).build();
-        credential = new AuthorizationCodeInstalledApp(flow, receiver).authorize(client.getUsername());
+
+        chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CONSOLE)
+                        .runeLiteFormattedMessage(message)
+                        .build());
     }
 
     public void savePlayerUnlocks(List<Integer> unlockedItems) throws GeneralSecurityException, IOException
     {
         if (credential == null)
         {
-            authorizactionCodeFlow();
-        }
-        else if (credential.getExpiresInSeconds() < 300)
-        {
-            credential.refreshToken();
+            sendChatMessage("Use !bmauth to allow for syncing unlocks.");
+            return;
         }
 
         SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=1:1&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
@@ -131,11 +193,8 @@ public class GoogleSheetsSyncer
     {
         if (credential == null)
         {
-            authorizactionCodeFlow();
-        }
-        else if (credential.getExpiresInSeconds() < 300)
-        {
-            credential.refreshToken();
+            sendChatMessage("Use !bmauth to allow for syncing unlocks.");
+            return new HashSet<>();
         }
 
         SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=COLUMNS&ranges=Rollups!c:c&access_token=%s", config.syncSheetId(), credential.getAccessToken()));

@@ -74,6 +74,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
@@ -94,6 +95,7 @@ public class GroupBronzemanModePlugin extends Plugin
     private static final String BM_COUNT_STRING = "!bmcount";
     private static final String BM_RESET_STRING = "!bmreset";
     private static final String BM_BACKUP_STRING = "!bmbackup";
+    private static final String BM_AUTH = "!bmauth";
 
     final int COLLECTION_LOG_GROUP_ID = 621;
     final int COLLECTION_VIEW = 35;
@@ -191,6 +193,9 @@ public class GroupBronzemanModePlugin extends Plugin
     @Inject
     GroundItemTracker giTracker;
 
+    @Inject
+    private ScheduledExecutorService executor;
+
     @Provides
     GroupBronzemanModeConfig provideConfig(ConfigManager configManager)
     {
@@ -210,6 +215,7 @@ public class GroupBronzemanModePlugin extends Plugin
         chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_COUNT_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_BACKUP_STRING, this::OnUnlocksBackupCommand);
+        chatCommandManager.registerCommand(BM_AUTH, this::OnAuthCommand);
 
         WorldItemSpawns.populateWorldSpawns(this.itemManager);
         giTracker.startUp(configManager.getConfig(GroundItemsConfig.class));
@@ -246,6 +252,8 @@ public class GroupBronzemanModePlugin extends Plugin
 
         giTracker.shutDown();
 
+        syncTimer.cancel();
+
         if (config.resetCommand())
         {
             chatCommandManager.unregisterCommand(BM_RESET_STRING);
@@ -279,6 +287,7 @@ public class GroupBronzemanModePlugin extends Plugin
         if (e.getGameState() == GameState.LOGIN_SCREEN)
         {
             itemEntries = null;
+            syncTimer.cancel();
         }
 
         giTracker.onGameStateChanged(e);
@@ -459,6 +468,28 @@ public class GroupBronzemanModePlugin extends Plugin
                     chatCommandManager.unregisterCommand(BM_RESET_STRING);
                 }
             }
+            else if (event.getKey().equals("authorize"))
+            {
+                if (config.authorize())
+                {
+                   if (!config.oAuth2ClientDetails().equals(""))
+                   {
+                       File clientFile = new File(playerFolder, "group-bronzeman-mode-client-credentials.txt");
+                       try
+                       {
+                           PrintWriter w = new PrintWriter(clientFile);
+                           w.println(config.oAuth2ClientDetails());
+                           w.close();
+
+                           configManager.setConfiguration(CONFIG_GROUP, "oAuth2ClientDetails", "");
+                       }
+                       catch (FileNotFoundException e)
+                       {
+                           e.printStackTrace();
+                       }
+                   }
+                }
+            }
             else if (event.getKey().equals("syncGroup"))
             {
                 savePlayerUnlocks();
@@ -474,16 +505,41 @@ public class GroupBronzemanModePlugin extends Plugin
                     syncTimer.cancel();
                 }
             }
-            else if (event.getKey().equals("authorize") && config.authorize())
-            {
-                try
-                {
-                    gsSyncer.authorizactionCodeFlow();
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
+        }
+    }
+
+    public String getOAuth2ClientDetails()
+    {
+        String content = null;
+        File clientFile = new File(playerFolder, "group-bronzeman-mode-client-credentials.txt");
+        try
+        {
+            BufferedReader r = new BufferedReader(new FileReader(clientFile));
+            content = r.readLine();
+            r.close();
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        return content;
+    }
+
+    private void OnAuthCommand(ChatMessage chatMessage, String message)
+    {
+        if (!sentByPlayer(chatMessage))
+        {
+            return;
+        }
+
+        if (config.authorize())
+        {
+            try {
+                sendChatMessage("Authorizing Google client...");
+                gsSyncer.authorize(this);
+            } catch (Exception ex) {
+                ex.printStackTrace();
             }
         }
     }
