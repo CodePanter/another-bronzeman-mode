@@ -73,7 +73,7 @@ public class GroupBronzemanModeInputListener extends MouseAdapter implements Key
 //                plugin.setHotKeyPressed(true);
 //                lastPress = Instant.now();
 //            }
-            plugin.setHotKeyPressed(true);
+            plugin.giTracker.setHotKeyPressed(true);
             lastPress = Instant.now();
         }
     }
@@ -83,7 +83,7 @@ public class GroupBronzemanModeInputListener extends MouseAdapter implements Key
     {
         if (e.getKeyCode() == HOTKEY)
         {
-            plugin.setHotKeyPressed(false);
+            plugin.giTracker.setHotKeyPressed(false);
 //            plugin.setTextBoxBounds(null);
 //            plugin.setHiddenBoxBounds(null);
 //            plugin.setHighlightBoxBounds(null);

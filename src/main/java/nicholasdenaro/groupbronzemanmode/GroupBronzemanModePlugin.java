@@ -27,33 +27,12 @@
  */
 package nicholasdenaro.groupbronzemanmode;
 
-import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
-import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
-import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.api.services.sheets.v4.SheetsScopes;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.LoadingCache;
-import com.google.common.collect.EvictingQueue;
-import com.google.common.collect.ImmutableList;
 import com.google.common.reflect.TypeToken;
 import com.google.common.util.concurrent.Runnables;
-import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.JsonFactory;
-import com.google.api.client.util.store.FileDataStoreFactory;
-import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
-import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
-import net.runelite.api.kit.KitType;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.events.PluginChanged;
@@ -61,18 +40,9 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.game.ItemStack;
-import net.runelite.client.input.KeyManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.grounditems.GroundItemsConfig;
-import net.runelite.client.plugins.grounditems.GroundItemsPlugin;
-import static net.runelite.client.plugins.grounditems.config.ItemHighlightMode.OVERLAY;
-import static net.runelite.client.plugins.grounditems.config.MenuHighlightMode.BOTH;
-import static net.runelite.client.plugins.grounditems.config.MenuHighlightMode.NAME;
-import static net.runelite.client.plugins.grounditems.config.MenuHighlightMode.OPTION;
-
-import net.runelite.client.plugins.grounditems.config.MenuHighlightMode;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
@@ -82,7 +52,6 @@ import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.game.chatbox.ChatboxTextInput;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 import net.runelite.client.game.WorldService;
 import net.runelite.http.api.worlds.World;
@@ -94,29 +63,17 @@ import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatCommandManager;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.ImageUtil;
-import static java.lang.Boolean.FALSE;
-import static java.lang.Boolean.TRUE;
 
 import javax.inject.Inject;
-import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.security.GeneralSecurityException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
@@ -199,6 +156,9 @@ public class GroupBronzemanModePlugin extends Plugin
     private ConfigManager configManager;
 
     @Inject
+    private GoogleSheetsSyncer gsSyncer;
+
+    @Inject
     private ChatCommandManager chatCommandManager;
 
     @Inject
@@ -212,40 +172,6 @@ public class GroupBronzemanModePlugin extends Plugin
     @Getter
     private BufferedImage unlockImage = null;
 
-    @Inject
-    private KeyManager keyManager;
-    @Inject
-    private GroupBronzemanModeInputListener inputListener;
-
-    private GroundItemsConfig gconfig;
-    @Getter(AccessLevel.PACKAGE)
-    @Setter(AccessLevel.PACKAGE)
-    private boolean hotKeyPressed;
-    @Getter
-    private final Map<GroundItem.GroundItemKey, GroundItem> collectedGroundItems = new LinkedHashMap<>();
-    private final Queue<Integer> droppedItemQueue = EvictingQueue.create(16); // recently dropped items
-    private int lastUsedItem;
-    private LoadingCache<NamedQuantity, Boolean> highlightedItems;
-    private LoadingCache<NamedQuantity, Boolean> hiddenItems;
-    private List<PriceHighlight> priceChecks = ImmutableList.of();
-    // The game won't send anything higher than this value to the plugin -
-    // so we replace any item quantity higher with "Lots" instead.
-    static final int MAX_QUANTITY = 65535;
-    // ItemID for coins
-    private static final int COINS = ItemID.COINS_995;
-    private static final int FIRST_OPTION = MenuAction.GROUND_ITEM_FIRST_OPTION.getId();
-    private static final int SECOND_OPTION = MenuAction.GROUND_ITEM_SECOND_OPTION.getId();
-    private static final int THIRD_OPTION = MenuAction.GROUND_ITEM_THIRD_OPTION.getId(); // this is Take
-    private static final int FOURTH_OPTION = MenuAction.GROUND_ITEM_FOURTH_OPTION.getId();
-    private static final int FIFTH_OPTION = MenuAction.GROUND_ITEM_FIFTH_OPTION.getId();
-    private static final int EXAMINE_ITEM = MenuAction.EXAMINE_ITEM_GROUND.getId();
-    private static final int CAST_ON_ITEM = MenuAction.SPELL_CAST_ON_GROUND_ITEM.getId();
-
-    private static final String TELEGRAB_TEXT = ColorUtil.wrapWithColorTag("Telekinetic Grab", Color.GREEN) + ColorUtil.prependColorTag(" -> ", Color.WHITE);
-
-    @Inject
-    private ScheduledExecutorService executor;
-
     private static final String SCRIPT_EVENT_SET_CHATBOX_INPUT = "setChatboxInput";
 
     private ChatboxTextInput searchInput;
@@ -254,14 +180,16 @@ public class GroupBronzemanModePlugin extends Plugin
 
     private List<String> namesBronzeman = new ArrayList<>();
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
-    private int bronzemanIndicatorOffset = -1; // offset for bronzeman icon
+    public int bronzemanIndicatorOffset = -1; // offset for bronzeman icon
     private boolean onLeagueWorld;
     private boolean deleteConfirmed = false;
     private File playerFile;
     private File playerFolder;
 
-    private Credential credential;
     private Timer syncTimer;
+
+    @Inject
+    GroundItemTracker giTracker;
 
     @Provides
     GroupBronzemanModeConfig provideConfig(ConfigManager configManager)
@@ -284,10 +212,7 @@ public class GroupBronzemanModePlugin extends Plugin
         chatCommandManager.registerCommand(BM_BACKUP_STRING, this::OnUnlocksBackupCommand);
 
         WorldItemSpawns.populateWorldSpawns(this.itemManager);
-        this.gconfig = configManager.getConfig(GroundItemsConfig.class);
-        executor.execute(this::reset);
-
-        keyManager.registerKeyListener(inputListener);
+        giTracker.startUp(configManager.getConfig(GroundItemsConfig.class));
 
         if (config.resetCommand())
         {
@@ -319,15 +244,7 @@ public class GroupBronzemanModePlugin extends Plugin
         chatCommandManager.unregisterCommand(BM_COUNT_STRING);
         chatCommandManager.unregisterCommand(BM_BACKUP_STRING);
 
-        highlightedItems.invalidateAll();
-        highlightedItems = null;
-        hiddenItems.invalidateAll();
-        hiddenItems = null;
-        hiddenItemList = null;
-        highlightedItemsList = null;
-        collectedGroundItems.clear();
-
-        keyManager.unregisterKeyListener(inputListener);
+        giTracker.shutDown();
 
         if (config.resetCommand())
         {
@@ -364,10 +281,7 @@ public class GroupBronzemanModePlugin extends Plugin
             itemEntries = null;
         }
 
-        if (e.getGameState() == GameState.LOADING)
-        {
-            collectedGroundItems.clear();
-        }
+        giTracker.onGameStateChanged(e);
     }
 
     @Subscribe
@@ -398,32 +312,19 @@ public class GroupBronzemanModePlugin extends Plugin
     @Subscribe
     public void onNpcLootReceived(NpcLootReceived npcLootReceived)
     {
-        Collection<ItemStack> items = npcLootReceived.getItems();
-        lootReceived(items, LootType.PVM);
+        giTracker.onNpcLootReceived(npcLootReceived);
     }
 
     @Subscribe
     public void onPlayerLootReceived(PlayerLootReceived playerLootReceived)
     {
-        Collection<ItemStack> items = playerLootReceived.getItems();
-        lootReceived(items, LootType.PVP);
+        giTracker.onPlayerLootReceived(playerLootReceived);
     }
 
     @Subscribe
     public void onItemSpawned(ItemSpawned itemSpawned)
     {
-        TileItem item = itemSpawned.getItem();
-        Tile tile = itemSpawned.getTile();
-
-        GroundItem groundItem = buildGroundItem(tile, item);
-
-        GroundItem.GroundItemKey groundItemKey = new GroundItem.GroundItemKey(item.getId(), tile.getWorldLocation());
-        GroundItem existing = collectedGroundItems.putIfAbsent(groundItemKey, groundItem);
-        if (existing != null)
-        {
-            existing.setQuantity(existing.getQuantity() + groundItem.getQuantity());
-            // The spawn time remains set at the oldest spawn
-        }
+        giTracker.onItemSpawned(itemSpawned);
     }
 
     @Subscribe
@@ -431,405 +332,26 @@ public class GroupBronzemanModePlugin extends Plugin
     {
         if (!focusChanged.isFocused())
         {
-            setHotKeyPressed(false);
+            giTracker.setHotKeyPressed(false);
         }
     }
 
     @Subscribe
     public void onItemDespawned(ItemDespawned itemDespawned)
     {
-        TileItem item = itemDespawned.getItem();
-        Tile tile = itemDespawned.getTile();
-
-        GroundItem.GroundItemKey groundItemKey = new GroundItem.GroundItemKey(item.getId(), tile.getWorldLocation());
-        GroundItem groundItem = collectedGroundItems.get(groundItemKey);
-        if (groundItem == null)
-        {
-            return;
-        }
-
-        if (groundItem.getQuantity() <= item.getQuantity())
-        {
-            collectedGroundItems.remove(groundItemKey);
-        }
-        else
-        {
-            groundItem.setQuantity(groundItem.getQuantity() - item.getQuantity());
-            // When picking up an item when multiple stacks appear on the ground,
-            // it is not known which item is picked up, so we invalidate the spawn
-            // time
-            groundItem.setSpawnTime(null);
-        }
+        giTracker.onItemDespawned(itemDespawned);
     }
 
     @Subscribe
     public void onItemQuantityChanged(ItemQuantityChanged itemQuantityChanged)
     {
-        TileItem item = itemQuantityChanged.getItem();
-        Tile tile = itemQuantityChanged.getTile();
-        int oldQuantity = itemQuantityChanged.getOldQuantity();
-        int newQuantity = itemQuantityChanged.getNewQuantity();
-
-        int diff = newQuantity - oldQuantity;
-        GroundItem.GroundItemKey groundItemKey = new GroundItem.GroundItemKey(item.getId(), tile.getWorldLocation());
-        GroundItem groundItem = collectedGroundItems.get(groundItemKey);
-        if (groundItem != null)
-        {
-            groundItem.setQuantity(groundItem.getQuantity() + diff);
-        }
+        giTracker.onItemQuantityChanged(itemQuantityChanged);
     }
 
     @Subscribe
     public void onInteractingChanged(InteractingChanged event)
     {
-        if (event.getSource() != client.getLocalPlayer())
-        {
-            return;
-        }
-
-        Actor opponent = event.getTarget();
-
-        if (opponent == null)
-        {
-            lastTime = Instant.now();
-            return;
-        }
-
-        lastOpponent = opponent;
-    }
-
-    private static final Duration WAIT = Duration.ofSeconds(5);
-
-    @Getter(AccessLevel.PACKAGE)
-    private Actor lastOpponent;
-
-    @Getter(AccessLevel.PACKAGE)
-    @VisibleForTesting
-    private Instant lastTime;
-
-    @Subscribe
-    public void onGameTick(GameTick gameTick)
-    {
-        if (lastOpponent != null
-                && lastTime != null
-                && client.getLocalPlayer().getInteracting() == null)
-        {
-            if (Duration.between(lastTime, Instant.now()).compareTo(WAIT) > 0)
-            {
-                lastOpponent = null;
-            }
-        }
-    }
-
-    private boolean isProjectile(TileItem item)
-    {
-        PlayerComposition equips = client.getLocalPlayer().getPlayerComposition();
-
-        return
-            (isArrow(item)
-                && isBow(equips.getEquipmentId(KitType.WEAPON))
-                && item.getId() == client.getItemContainer(InventoryID.EQUIPMENT).getItem(EquipmentInventorySlot.AMMO.getSlotIdx()).getId()
-                )
-            || (isBolt(item)
-                && isCrossbow(equips.getEquipmentId(KitType.WEAPON))
-                && item.getId() == client.getItemContainer(InventoryID.EQUIPMENT).getItem(EquipmentInventorySlot.AMMO.getSlotIdx()).getId()
-                )
-            || (isDart(item.getId())
-                && isDart(equips.getEquipmentId(KitType.WEAPON))
-            );
-    }
-
-    private boolean isDart(int itemId)
-    {
-        final Set<Integer> darts = new HashSet<Integer>(Arrays.asList(new Integer[]{
-                ItemID.DART,
-                ItemID.BRONZE_DART,
-                ItemID.BRONZE_DARTP,
-                ItemID.BRONZE_DARTP_5628,
-                ItemID.BRONZE_DARTP_5635,
-                ItemID.IRON_DART,
-                ItemID.IRON_DARTP,
-                ItemID.IRON_DARTP_5629,
-                ItemID.IRON_DARTP_5636,
-                ItemID.STEEL_DART,
-                ItemID.STEEL_DARTP,
-                ItemID.STEEL_DARTP_5630,
-                ItemID.STEEL_DARTP_5637,
-                ItemID.BLACK_DART,
-                ItemID.BLACK_DARTP,
-                ItemID.BLACK_DARTP_5631,
-                ItemID.BLACK_DARTP_5638,
-                ItemID.MITHRIL_DART,
-                ItemID.MITHRIL_DARTP,
-                ItemID.MITHRIL_DARTP_5632,
-                ItemID.MITHRIL_DARTP_5639,
-                ItemID.ADAMANT_DART,
-                ItemID.ADAMANT_DARTP,
-                ItemID.ADAMANT_DARTP_5633,
-                ItemID.ADAMANT_DARTP_5640,
-                ItemID.RUNE_DART,
-                ItemID.RUNE_DARTP,
-                ItemID.RUNE_DARTP_5634,
-                ItemID.RUNE_DARTP_5641,
-                ItemID.DRAGON_DART,
-                ItemID.DRAGON_DARTP,
-                ItemID.DRAGON_DARTP_11233,
-                ItemID.DRAGON_DARTP_11234,
-        }));
-
-        return darts.contains(itemId);
-    }
-
-    private boolean isBow(int itemId)
-    {
-        final Set<Integer> bows = new HashSet<Integer>(Arrays.asList(new Integer[]{
-                ItemID.SHORTBOW,
-                ItemID.LONGBOW,
-                ItemID.OAK_SHORTBOW,
-                ItemID.OAK_LONGBOW,
-                ItemID.WILLOW_SHORTBOW,
-                ItemID.WILLOW_LONGBOW,
-                ItemID.MAPLE_SHORTBOW,
-                ItemID.MAPLE_LONGBOW,
-                ItemID.YEW_SHORTBOW,
-                ItemID.YEW_LONGBOW,
-                ItemID.MAGIC_SHORTBOW,
-                ItemID.MAGIC_LONGBOW,
-                ItemID.CRYSTAL_BOW,
-                ItemID.CURSED_GOBLIN_BOW,
-                ItemID.COMP_OGRE_BOW,
-                ItemID.CRAWS_BOW,
-                ItemID.DARK_BOW,
-                ItemID.MAGIC_COMP_BOW,
-                ItemID.NEW_CRYSTAL_BOW,
-                ItemID.OGRE_BOW,
-                ItemID.RAIN_BOW,
-                ItemID.SIGNED_OAK_BOW,
-                ItemID.STARTER_BOW,
-                ItemID.TRAINING_BOW,
-                ItemID.TWISTED_BOW,
-                ItemID.WILLOW_COMP_BOW,
-                ItemID.YEW_COMP_BOW,
-                ItemID.CORRUPTED_BOW_ATTUNED,
-                ItemID.CORRUPTED_BOW_BASIC,
-                ItemID.CORRUPTED_BOW_PERFECTED,
-        }));
-
-        return bows.contains(itemId);
-    }
-
-    private boolean isCrossbow(int itemId)
-    {
-        final Set<Integer> crossbows = new HashSet<Integer>(Arrays.asList(new Integer[]{
-                ItemID.CROSSBOW,
-                ItemID.BRONZE_CROSSBOW,
-                ItemID.IRON_CROSSBOW,
-                ItemID.STEEL_CROSSBOW,
-                ItemID.MITHRIL_CROSSBOW,
-                ItemID.ADAMANT_CROSSBOW,
-                ItemID.RUNE_CROSSBOW,
-                ItemID.ARMADYL_CROSSBOW,
-                ItemID.BLURITE_CROSSBOW,
-                ItemID.DORGESHUUN_CROSSBOW,
-                ItemID.DRAGON_CROSSBOW,
-                ItemID.HUNTERS_CROSSBOW,
-                ItemID.KARILS_CROSSBOW,
-                ItemID.PHOENIX_CROSSBOW,
-        }));
-
-        return crossbows.contains(itemId);
-    }
-
-    private boolean isArrow(TileItem item)
-    {
-        final Set<Integer> arrows = new HashSet<Integer>(Arrays.asList(new Integer[]{
-                ItemID.BRONZE_ARROW,
-                ItemID.BRONZE_ARROWP,
-                ItemID.BRONZE_ARROWP_5616,
-                ItemID.BRONZE_ARROWP_5622,
-                ItemID.IRON_ARROW,
-                ItemID.IRON_ARROWP,
-                ItemID.IRON_ARROWP_5617,
-                ItemID.IRON_ARROWP_5623,
-                ItemID.STEEL_ARROW,
-                ItemID.STEEL_ARROWP,
-                ItemID.STEEL_ARROWP_5618,
-                ItemID.STEEL_ARROWP_5624,
-                ItemID.MITHRIL_ARROW,
-                ItemID.MITHRIL_ARROWP,
-                ItemID.MITHRIL_ARROWP_5619,
-                ItemID.MITHRIL_ARROWP_5625,
-                ItemID.ADAMANT_ARROW,
-                ItemID.ADAMANT_ARROWP,
-                ItemID.ADAMANT_ARROWP_5620,
-                ItemID.ADAMANT_ARROWP_5626,
-                ItemID.RUNE_ARROW,
-                ItemID.RUNE_ARROWP,
-                ItemID.RUNE_ARROWP_5621,
-                ItemID.RUNE_ARROWP_5627,
-        }));
-
-        return arrows.contains(item.getId());
-    }
-
-    private boolean isBolt(TileItem item)
-    {
-        final Set<Integer> bolts = new HashSet<Integer>(Arrays.asList(new Integer[]{
-                ItemID.BRONZE_BOLTS,
-                ItemID.BRONZE_BOLTS_P,
-                ItemID.BRONZE_BOLTS_P_6061,
-                ItemID.BRONZE_BOLTS_P_6062,
-                ItemID.IRON_BOLTS,
-                ItemID.IRON_BOLTS_P,
-                ItemID.IRON_BOLTS_P_9294,
-                ItemID.IRON_BOLTS_P_9301,
-                ItemID.STEEL_BOLTS,
-                ItemID.STEEL_BOLTS_P,
-                ItemID.STEEL_BOLTS_P_9295,
-                ItemID.STEEL_BOLTS_P_9302,
-                ItemID.MITHRIL_BOLTS,
-                ItemID.MITHRIL_BOLTS_P,
-                ItemID.MITHRIL_BOLTS_P_9296,
-                ItemID.MITHRIL_BOLTS_P_9303,
-                ItemID.ADAMANT_BOLTS,
-                ItemID.ADAMANT_BOLTS_P,
-                ItemID.ADAMANT_BOLTS_P_9297,
-                ItemID.ADAMANT_BOLTS_P_9304,
-                ItemID.RUNITE_BOLTS,
-                ItemID.RUNITE_BOLTS_P,
-                ItemID.RUNITE_BOLTS_P_9298,
-                ItemID.RUNITE_BOLTS_P_9305,
-        }));
-
-        return bolts.contains(item.getId());
-    }
-
-    private boolean isNaturalSpawn(WorldPoint point, TileItem item)
-    {
-        return WorldItemSpawns.isNaturalSpawn(point, item);
-    }
-
-    private GroundItem buildGroundItem(final Tile tile, final TileItem item)
-    {
-        // Collect the data for the item
-        final int itemId = item.getId();
-        final ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-        final int realItemId = itemComposition.getNote() != -1 ? itemComposition.getLinkedNoteId() : itemId;
-        final int alchPrice = itemComposition.getHaPrice();
-        final boolean dropped = tile.getWorldLocation().equals(client.getLocalPlayer().getWorldLocation()) && droppedItemQueue.remove(itemId);
-        final boolean isNaturalSpawn = isNaturalSpawn(tile.getWorldLocation(), item);
-        final boolean opponentTile = lastOpponent != null && tile.getWorldLocation().distanceTo(lastOpponent.getWorldLocation()) < 3;
-        final boolean projectile = opponentTile && isProjectile(item);
-        final boolean table = itemId == lastUsedItem && tile.getItemLayer().getHeight() > 0;
-
-        final GroundItem groundItem = GroundItem.builder()
-                .id(itemId)
-                .location(tile.getWorldLocation())
-                .itemId(realItemId)
-                .quantity(item.getQuantity())
-                .name(itemComposition.getName())
-                .haPrice(alchPrice)
-                .height(tile.getItemLayer().getHeight())
-                .tradeable(itemComposition.isTradeable())
-                .lootType(
-                        isNaturalSpawn ?
-                                LootType.WORLD :
-                                projectile ?
-                                        LootType.PROJECTILES :
-                                        dropped ?
-                                                LootType.DROPPED :
-                                                table ?
-                                                        LootType.TABLE :
-                                                        LootType.UNKNOWN)
-                .spawnTime(Instant.now())
-                .stackable(itemComposition.isStackable())
-                .build();
-
-        // Update item price in case it is coins
-        if (realItemId == COINS)
-        {
-            groundItem.setHaPrice(1);
-            groundItem.setGePrice(1);
-        }
-        else
-        {
-            groundItem.setGePrice(itemManager.getItemPrice(realItemId));
-        }
-
-        groundItem.setHidden(getHidden(new NamedQuantity(itemComposition.getName(), item.getQuantity()), groundItem.getGePrice(), groundItem.getHaPrice(), groundItem.isTradeable()) != null);
-
-
-        return groundItem;
-    }
-
-    private void lootReceived(Collection<ItemStack> items, LootType lootType)
-    {
-        for (ItemStack itemStack : items)
-        {
-            WorldPoint location = WorldPoint.fromLocal(client, itemStack.getLocation());
-            GroundItem.GroundItemKey groundItemKey = new GroundItem.GroundItemKey(itemStack.getId(), location);
-            GroundItem groundItem = collectedGroundItems.get(groundItemKey);
-            if (groundItem != null)
-            {
-                groundItem.setLootType(lootType);
-            }
-        }
-    }
-
-    Color getHighlighted(NamedQuantity item, int gePrice, int haPrice)
-    {
-        return Color.white;
-//        if (TRUE.equals(highlightedItems.getUnchecked(item)))
-//        {
-//            return config.highlightedColor();
-//        }
-//
-//        // Explicit hide takes priority over implicit highlight
-//        if (TRUE.equals(hiddenItems.getUnchecked(item)))
-//        {
-//            return null;
-//        }
-//
-//        final int price = getValueByMode(gePrice, haPrice);
-//        for (PriceHighlight highlight : priceChecks)
-//        {
-//            if (price > highlight.getPrice())
-//            {
-//                return highlight.getColor();
-//            }
-//        }
-//
-//        return null;
-    }
-
-    Color getHidden(NamedQuantity item, int gePrice, int haPrice, boolean isTradeable)
-    {
-        final boolean isExplicitHidden = TRUE.equals(hiddenItems.getUnchecked(item));
-        final boolean isExplicitHighlight = TRUE.equals(highlightedItems.getUnchecked(item));
-        final boolean canBeHidden = gePrice > 0 || isTradeable || !gconfig.dontHideUntradeables();
-        final boolean underGe = gePrice < gconfig.getHideUnderValue();
-        final boolean underHa = haPrice < gconfig.getHideUnderValue();
-
-        // Explicit highlight takes priority over implicit hide
-        return isExplicitHidden || (!isExplicitHighlight && canBeHidden && underGe && underHa)
-                ? gconfig.hiddenColor()
-                : null;
-    }
-
-    Color getItemColor(Color highlighted, Color hidden)
-    {
-        if (highlighted != null)
-        {
-            return highlighted;
-        }
-
-        if (hidden != null)
-        {
-            return hidden;
-        }
-
-//        return config.defaultColor();
-        return Color.white;
+        giTracker.onInteractingChanged(event);
     }
 
     /** Unlocks all new items that are currently not unlocked **/
@@ -863,29 +385,7 @@ public class GroupBronzemanModePlugin extends Plugin
             return;
         }
 
-        if (event.getMenuAction() == MenuAction.ITEM_FIFTH_OPTION)
-        {
-            int itemId = event.getId();
-            // Keep a queue of recently dropped items to better detect
-            // item spawns that are drops
-            droppedItemQueue.add(itemId);
-        }
-        else if (event.getMenuAction() == MenuAction.ITEM_USE_ON_GAME_OBJECT)
-        {
-            final ItemContainer inventory = client.getItemContainer(InventoryID.INVENTORY);
-            if (inventory == null)
-            {
-                return;
-            }
-
-            final Item clickedItem = inventory.getItem(event.getSelectedItemIndex());
-            if (clickedItem == null)
-            {
-                return;
-            }
-
-            lastUsedItem = clickedItem.getId();
-        }
+        giTracker.onMenuOptionClicked(event);
     }
 
     @Subscribe
@@ -930,86 +430,13 @@ public class GroupBronzemanModePlugin extends Plugin
     @Subscribe
     public void onMenuEntryAdded(MenuEntryAdded event)
     {
-        if (gconfig.itemHighlightMode() != OVERLAY)
-        {
-            final boolean telegrabEntry = event.getOption().equals("Cast") && event.getTarget().startsWith(TELEGRAB_TEXT) && event.getType() == CAST_ON_ITEM;
-            if (!(event.getOption().equals("Take") && event.getType() == THIRD_OPTION) && !telegrabEntry)
-            {
-                return;
-            }
-
-            final int itemId = event.getIdentifier();
-            final int sceneX = event.getActionParam0();
-            final int sceneY = event.getActionParam1();
-
-            MenuEntry[] menuEntries = client.getMenuEntries();
-            MenuEntry lastEntry = menuEntries[menuEntries.length - 1];
-
-            final WorldPoint worldPoint = WorldPoint.fromScene(client, sceneX, sceneY, client.getPlane());
-            GroundItem.GroundItemKey groundItemKey = new GroundItem.GroundItemKey(itemId, worldPoint);
-            GroundItem groundItem = collectedGroundItems.get(groundItemKey);
-            int quantity = groundItem.getQuantity();
-
-            final int gePrice = groundItem.getGePrice();
-            final int haPrice = groundItem.getHaPrice();
-            final Color hidden = getHidden(new NamedQuantity(groundItem.getName(), quantity), gePrice, haPrice, groundItem.isTradeable());
-            final Color highlighted = getHighlighted(new NamedQuantity(groundItem.getName(), quantity), gePrice, haPrice);
-            final Color color = getItemColor(highlighted, hidden);
-            final boolean canBeRecolored = highlighted != null || (hidden != null && gconfig.recolorMenuHiddenItems());
-
-            if (color != null && canBeRecolored && !color.equals(gconfig.defaultColor()))
-            {
-                final MenuHighlightMode mode = gconfig.menuHighlightMode();
-
-                if (mode == BOTH || mode == OPTION)
-                {
-                    final String optionText = telegrabEntry ? "Cast" : "Take";
-                    lastEntry.setOption(ColorUtil.prependColorTag(optionText, color));
-                }
-
-                if (mode == BOTH || mode == NAME)
-                {
-                    String target = lastEntry.getTarget();
-
-                    if (telegrabEntry)
-                    {
-                        target = target.substring(TELEGRAB_TEXT.length());
-                    }
-
-                    target = ColorUtil.prependColorTag(target.substring(target.indexOf('>') + 1), color);
-
-                    if (telegrabEntry)
-                    {
-                        target = TELEGRAB_TEXT + target;
-                    }
-
-                    lastEntry.setTarget(target);
-                }
-            }
-
-            if (gconfig.showMenuItemQuantities() && groundItem.isStackable() && quantity > 1)
-            {
-                lastEntry.setTarget(lastEntry.getTarget() + " (" + quantity + ")");
-            }
-
-            if (groundItem.isMine())
-            {
-                String target = lastEntry.getTarget();
-                target += "<img=" + bronzemanIndicatorOffset + ">";
-                lastEntry.setTarget(target);
-            }
-
-            client.setMenuEntries(menuEntries);
-        }
+        giTracker.onMenuEntryAdded(event);
     }
 
     @Subscribe
     public void onConfigChanged(ConfigChanged event)
     {
-        if (event.getGroup().equals("grounditems"))
-        {
-            executor.execute(this::reset);
-        }
+        giTracker.onConfigChanged(event);
 
         if (event.getGroup().equals(CONFIG_GROUP))
         {
@@ -1051,7 +478,7 @@ public class GroupBronzemanModePlugin extends Plugin
             {
                 try
                 {
-                    authorizactionCodeFlow();
+                    gsSyncer.authorizactionCodeFlow();
                 }
                 catch (Exception ex)
                 {
@@ -1059,60 +486,6 @@ public class GroupBronzemanModePlugin extends Plugin
                 }
             }
         }
-    }
-
-    private List<String> hiddenItemList = new CopyOnWriteArrayList<>();
-    private List<String> highlightedItemsList = new CopyOnWriteArrayList<>();
-
-    @Value
-    static class PriceHighlight
-    {
-        private final int price;
-        private final Color color;
-    }
-
-    private void reset()
-    {
-        // gets the hidden items from the text box in the config
-        hiddenItemList = Text.fromCSV(gconfig.getHiddenItems());
-
-        // gets the highlighted items from the text box in the config
-        highlightedItemsList = Text.fromCSV(gconfig.getHighlightItems());
-
-        highlightedItems = CacheBuilder.newBuilder()
-                .maximumSize(512L)
-                .expireAfterAccess(10, TimeUnit.MINUTES)
-                .build(new WildcardMatchLoader(highlightedItemsList));
-
-        hiddenItems = CacheBuilder.newBuilder()
-                .maximumSize(512L)
-                .expireAfterAccess(10, TimeUnit.MINUTES)
-                .build(new WildcardMatchLoader(hiddenItemList));
-
-        // Cache colors
-        ImmutableList.Builder<PriceHighlight> priceCheckBuilder = ImmutableList.builder();
-
-        if (gconfig.insaneValuePrice() > 0)
-        {
-            priceCheckBuilder.add(new PriceHighlight(gconfig.insaneValuePrice(), gconfig.insaneValueColor()));
-        }
-
-        if (gconfig.highValuePrice() > 0)
-        {
-            priceCheckBuilder.add(new PriceHighlight(gconfig.highValuePrice(), gconfig.highValueColor()));
-        }
-
-        if (gconfig.mediumValuePrice() > 0)
-        {
-            priceCheckBuilder.add(new PriceHighlight(gconfig.mediumValuePrice(), gconfig.mediumValueColor()));
-        }
-
-        if (gconfig.lowValuePrice() > 0)
-        {
-            priceCheckBuilder.add(new PriceHighlight(gconfig.lowValuePrice(), gconfig.lowValueColor()));
-        }
-
-        priceChecks = priceCheckBuilder.build();
     }
 
     private void startTimer()
@@ -1524,28 +897,6 @@ public class GroupBronzemanModePlugin extends Plugin
         }
     }
 
-    private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
-    private static final List<String> SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS);
-    //private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
-    private static final String TOKENS_DIRECTORY_PATH = "tokens";
-
-    private void authorizactionCodeFlow() throws IOException, GeneralSecurityException {
-        final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-        // Load client secrets.
-        InputStream in = new ByteArrayInputStream(config.oAuth2ClientDetails().getBytes(StandardCharsets.UTF_8));
-
-        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
-
-        // Build flow and trigger user authorization request.
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-                .setAccessType("offline")
-                .build();
-        LocalServerReceiver receiver = new LocalServerReceiver.Builder().setPort(8888).build();
-        credential = new AuthorizationCodeInstalledApp(flow, receiver).authorize(client.getUsername());
-    }
-
     /* Saves players unlock JSON to a .txt file every time they unlock a new item */
     private void savePlayerUnlocks()
     {
@@ -1558,133 +909,13 @@ public class GroupBronzemanModePlugin extends Plugin
 
             if (config.syncGroup())
             {
-                if (credential == null)
-                {
-                    authorizactionCodeFlow();
-                }
-                else if (credential.getExpiresInSeconds() < 300)
-                {
-                    credential.refreshToken();
-                }
+                gsSyncer.savePlayerUnlocks(unlockedItems);
 
-                SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=1:1&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
-                int foundColumn = -1;
-                int column = -1;
-                String columnName = "";
-                if (response.valueRanges[0].values != null)
-                {
-                    List<String> users = Arrays.asList(response.valueRanges[0].values[0]);
-                    column = users.indexOf(client.getUsername());
-                    foundColumn = column;
-                    do
-                    {
-                        int colPart = column % 26;
-                        columnName = (char)('a' + colPart) + columnName;
-                        column = (column / 26);
-                    } while (column-- > 0);
-                }
-
-                if (foundColumn == -1)
-                {
-                    // Set row number for new player
-                    response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=NewSlot&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
-                    columnName = response.valueRanges[0].values[0][0];
-                }
-
-                SheetsPutRequest(
-                        String.format(
-                                "https://sheets.googleapis.com/v4/spreadsheets/%s/values/CharacterData!%s:%s?valueInputOption=RAW&access_token=%s",
-                                config.syncSheetId(),
-                                columnName,
-                                columnName,
-                                credential.getAccessToken()),
-                        new PlayerDataForSheets(unlockedItems)
-                );
             }
         }
         catch (Exception e)
         {
             e.printStackTrace();
-        }
-    }
-
-    class SheetsBatchGet
-    {
-        public String spreadsheetId;
-        public ValueRanges[] valueRanges;
-    }
-
-    class ValueRanges
-    {
-        public String range;
-        public String majorDimension;
-        public String[][] values;
-    }
-
-    class PlayerDataForSheets
-    {
-        public String[][] values;
-
-        public PlayerDataForSheets(List<Integer> data)
-        {
-            values = new String[data.size() + 1][];
-            values[0] = new String[1];
-            values[0][0] = client.getUsername();
-            for (int c = 0; c < data.size(); c++)
-            {
-                values[c + 1] = new String[1];
-                values[c + 1][0] = "" + data.get(c);
-            }
-        }
-    }
-
-    private SheetsBatchGet SheetsRequest(String resource)
-    {
-        try {
-            URL url = new URL(resource);
-            HttpURLConnection connection = null;
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            BufferedReader rd = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String payload = "";
-            String line;
-            while ((line = rd.readLine()) != null) {
-                payload += line + "\n";
-            }
-            rd.close();
-            return GSON.fromJson(payload, SheetsBatchGet.class);
-        }
-        catch(Exception ex)
-        {
-            System.out.println(ex.getMessage());
-            return null;
-        }
-    }
-
-    private void SheetsPutRequest(String resource, PlayerDataForSheets data)
-    {
-        try {
-            URL url = new URL(resource);
-            HttpURLConnection connection = null;
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("PUT");
-            connection.setDoOutput(true);
-            BufferedWriter wd = new BufferedWriter(new OutputStreamWriter(connection.getOutputStream()));
-            String jsonBody = GSON.toJson(data);
-            wd.write(jsonBody);
-            wd.flush();
-            BufferedReader rd = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String payload = "";
-            String line;
-            while ((line = rd.readLine()) != null) {
-                payload += line + "\n";
-            }
-            rd.close();
-            wd.close();
-        }
-        catch(Exception ex)
-        {
-            System.out.println(ex.getMessage());
         }
     }
 
@@ -1702,33 +933,13 @@ public class GroupBronzemanModePlugin extends Plugin
 
             if (config.syncGroup())
             {
-                if (credential == null)
+                Set<Integer> newItems = gsSyncer.loadPlayerUnlocks(previousItems);
+                for (Integer item:newItems)
                 {
-                    authorizactionCodeFlow();
+                    GroupBronzemanModeOverlay.addItemUnlock(item);
                 }
-                else if (credential.getExpiresInSeconds() < 300)
-                {
-                    credential.refreshToken();
-                }
-
-                SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=COLUMNS&ranges=Rollups!c:c&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
-
-                if (response.valueRanges[0].values != null)
-                {
-                    List<String> items = Arrays.asList(response.valueRanges[0].values[0]);
-                    Set<Integer> newItems = new HashSet<Integer>(items.stream().map(Integer::parseInt).collect(Collectors.toList()));
-                    newItems.removeAll(previousItems);
-                    for (Integer item:newItems)
-                    {
-                        GroupBronzemanModeOverlay.addItemUnlock(item);
-                    }
-                    unlockedItems.addAll(newItems);
-                }
+                unlockedItems.addAll(newItems);
             }
-
-            //Set<Integer> set = new HashSet<Integer>(unlockedItems);
-            //unlockedItems.clear();
-            //unlockedItems.addAll(set);
         }
         catch (Exception e)
         {

@@ -33,9 +33,7 @@ import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.grounditems.GroundItemsConfig;
-import net.runelite.client.plugins.grounditems.GroundItemsPlugin;
 import net.runelite.client.plugins.grounditems.config.DespawnTimerMode;
 import net.runelite.client.plugins.grounditems.config.PriceDisplayMode;
 import net.runelite.client.ui.overlay.OverlayLayer;
@@ -53,7 +51,6 @@ import javax.swing.SwingUtilities;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -65,7 +62,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.QuantityFormatter;
 
-import static nicholasdenaro.groupbronzemanmode.GroupBronzemanModePlugin.MAX_QUANTITY;
+import static nicholasdenaro.groupbronzemanmode.GroundItemTracker.MAX_QUANTITY;
 
 @Slf4j
 public class GroupBronzemanModeOverlay extends Overlay
@@ -151,7 +148,8 @@ public class GroupBronzemanModeOverlay extends Overlay
         {
             renderGroundItems(graphics);
         }
-        //setPosition(OverlayPosition.TOP_CENTER);
+
+        setPosition(OverlayPosition.TOP_CENTER);
 
         if (itemUnlockList.isEmpty())
         {
@@ -192,6 +190,9 @@ public class GroupBronzemanModeOverlay extends Overlay
             itemUnlockList.remove(currentUnlock);
             currentUnlock = null;
         }
+
+        setPosition(OverlayPosition.DYNAMIC);
+        setLayer(OverlayLayer.ABOVE_SCENE);
         return null;
     }
 
@@ -202,15 +203,13 @@ public class GroupBronzemanModeOverlay extends Overlay
 
     private void renderGroundItems(Graphics2D graphics)
     {
-        // Start Item render
-
         offsetMap.clear();
 
 //        plugin.setTextBoxBounds(null);
 //        plugin.setHiddenBoxBounds(null);
 //        plugin.setHighlightBoxBounds(null);
 
-        Collection<GroundItem> groundItemList = plugin.getCollectedGroundItems().values();
+        Collection<GroundItem> groundItemList = plugin.giTracker.getCollectedGroundItems().values();
 //        final boolean outline = config.textOutline();
         final boolean outline = false;
         //final DespawnTimerMode groundItemTimers = config.groundItemTimers();
@@ -218,7 +217,7 @@ public class GroupBronzemanModeOverlay extends Overlay
 
         GroundItem topGroundItem = null;
 
-        if (plugin.isHotKeyPressed())
+        if (plugin.giTracker.isHotKeyPressed())
         {
             // Make copy of ground items because we are going to modify them here, and the array list supports our
             // desired behaviour here
@@ -281,20 +280,25 @@ public class GroupBronzemanModeOverlay extends Overlay
             }
         }
 
-        if (!plugin.isHotKeyPressed())
+        // TODO: make sure this logic checks out. This can probably be simplified
+        if (!plugin.giTracker.isHotKeyPressed())
         {
             if (gconfig.onlyShowLoot())
             {
+                // Show the loot in the appropriate order if the hotkey is not pressed.
+                // We want to show default, non-hidden first
                 groundItemList.stream().filter(item -> isDefaultGroundItemTracker(item) && !item.isHidden()).forEach(item ->
                 {
                     markBronzemanItem(graphics, item);
                 });
 
+                // Then we show default, hidden
                 groundItemList.stream().filter(item -> isDefaultGroundItemTracker(item) && item.isHidden()).forEach(item ->
                 {
                     markBronzemanItem(graphics, item);
                 });
 
+                // Then show non-default items. (These are rednered at the top of the stack)
                 groundItemList.stream().filter(item -> !isDefaultGroundItemTracker(item)).forEach(item ->
                 {
                     markBronzemanItem(graphics, item);
@@ -319,7 +323,6 @@ public class GroupBronzemanModeOverlay extends Overlay
                 markBronzemanItem(graphics, item);
             });
         }
-        // End Item render
     }
 
     private void markBronzemanItem(Graphics2D graphics, GroundItem item)
@@ -333,21 +336,22 @@ public class GroupBronzemanModeOverlay extends Overlay
                 || (onlyShowLoot && !item.isMine()))
         {
             return;
-            //continue;
         }
 
-        final Color highlighted = plugin.getHighlighted(new NamedQuantity(item), item.getGePrice(), item.getHaPrice());
-        final Color hidden = plugin.getHidden(new NamedQuantity(item), item.getGePrice(), item.getHaPrice(), item.isTradeable());
+        final Color highlighted = plugin.giTracker.getHighlighted(new NamedQuantity(item), item.getGePrice(), item.getHaPrice());
+        final Color hidden = plugin.giTracker.getHidden(new NamedQuantity(item), item.getGePrice(), item.getHaPrice(), item.isTradeable());
 
+        // Calculate if the item is hidden and then store the value
         item.setHidden(hidden != null);
 
-        if (/* config.hideHiddenGroundItems() && */item.isHidden() && !plugin.isHotKeyPressed())
+        // Only show hidden items if the hotkey is pressed
+        if (item.isHidden() && !plugin.giTracker.isHotKeyPressed())
         {
             return;
         }
 
-        if (highlighted == null && !plugin.isHotKeyPressed())
-        {
+//        if (highlighted == null && !plugin.giTracker.isHotKeyPressed())
+//        {
 //            // Do not display hidden items
 //            if (hidden != null)
 //            {
@@ -359,9 +363,9 @@ public class GroupBronzemanModeOverlay extends Overlay
 //            {
 //                return;
 //            }
-        }
+//        }
 
-        final Color color = plugin.getItemColor(highlighted, hidden);
+        final Color color = plugin.giTracker.getItemColor(highlighted, hidden);
 
 ////            if (config.highlightTiles())
 //            {
@@ -437,19 +441,16 @@ public class GroupBronzemanModeOverlay extends Overlay
         if (textPoint == null)
         {
             return;
-            //continue;
         }
 
-        final int offset = plugin.isHotKeyPressed()
+        final int offset = plugin.giTracker.isHotKeyPressed()
                 ? item.getOffset()
                 : offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0);
-
-//        final int offset = offsetMap.compute(item.getLocation(), (k, v) -> v != null ? v + 1 : 0);
 
         final int textX = textPoint.getX();
         final int textY = textPoint.getY() - (STRING_GAP * offset);
 
-        if (!isDefaultGroundItemTracker(item) || !item.isHidden() || plugin.isHotKeyPressed())
+        if (!isDefaultGroundItemTracker(item) || !item.isHidden() || plugin.giTracker.isHotKeyPressed())
         {
             drawBronzemanIconOverlay(graphics, textX, textY, item);
         }

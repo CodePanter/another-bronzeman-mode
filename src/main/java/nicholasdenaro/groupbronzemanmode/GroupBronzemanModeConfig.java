@@ -126,7 +126,7 @@ public interface GroupBronzemanModeConfig extends Config
             description = "Enables syncing item unlocks with a group by using a shared Google Sheet.",
             position = 9
     )
-    default boolean syncGroup(){return false;}
+    default boolean syncGroup(){ return false; }
 
     @ConfigItem(
             keyName = "syncSheetId",
@@ -134,15 +134,15 @@ public interface GroupBronzemanModeConfig extends Config
             description = "Google Sheet Id for syncing item unlocks",
             position = 10
     )
-    default String syncSheetId(){return "";}
+    default String syncSheetId(){ return ""; }
 
     @ConfigItem(
             keyName = "oAuth2ClientDetails",
-            name = "Google Sheet OAuth2 client details",
+            name = "Client Credentials",
             description = "This is the file contents of the client details from Google Cloud Platform.",
             position = 11
     )
-    default String oAuth2ClientDetails(){return "";}
+    default String oAuth2ClientDetails(){ return ""; }
 
     @ConfigItem(
             keyName = "authorize",
@@ -155,16 +155,8 @@ public interface GroupBronzemanModeConfig extends Config
     @ConfigItem(
             keyName = "markBronzemanLoot",
             name = "Mark Bronzeman Loot",
-            description = "This will also track other items of yours, like arrows, darts, and bolts.",
+            description = "This will also track other items of yours, like arrows, darts, and bolts. This also shows naturally spawning items.",
             position = 13
     )
     default boolean markBronzemanLoot(){return false;}
-
-    @ConfigItem(
-            keyName = "hideHiddenGroundItems",
-            name = "Hide hidden GroundItems",
-            description = "This way you can hide things you don't want to see. This doesn't play nicely with the GroundItems showOnlyLoot, as you can't deselect without toggling that config option.",
-            position = 14
-    )
-    default boolean hideHiddenGroundItems(){return false;}
 }
