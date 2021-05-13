@@ -252,7 +252,11 @@ public class GroupBronzemanModePlugin extends Plugin
 
         giTracker.shutDown();
 
-        syncTimer.cancel();
+        if (syncTimer != null)
+        {
+            syncTimer.cancel();
+            syncTimer = null;
+        }
 
         if (config.resetCommand())
         {
@@ -287,7 +291,11 @@ public class GroupBronzemanModePlugin extends Plugin
         if (e.getGameState() == GameState.LOGIN_SCREEN)
         {
             itemEntries = null;
-            syncTimer.cancel();
+            if (syncTimer != null)
+            {
+                syncTimer.cancel();
+                syncTimer = null;
+            }
         }
 
         giTracker.onGameStateChanged(e);
@@ -502,7 +510,11 @@ public class GroupBronzemanModePlugin extends Plugin
                 }
                 else
                 {
-                    syncTimer.cancel();
+                    if (syncTimer != null)
+                    {
+                        syncTimer.cancel();
+                        syncTimer = null;
+                    }
                 }
             }
         }
@@ -546,14 +558,16 @@ public class GroupBronzemanModePlugin extends Plugin
 
     private void startTimer()
     {
-        if (syncTimer == null) {
-            syncTimer = new Timer();
+        if (syncTimer != null)
+        {
+            syncTimer.cancel();
         }
-        syncTimer.cancel();
+
+        syncTimer = new Timer();
         TimerTask task = new TimerTask() {
             @Override
             public void run() {
-                sendChatMessage("Syncing Bronzeman Unlocks");
+                sendChatMessage("Syncing Bronzeman Unlocks.");
                 loadPlayerUnlocks();
                 savePlayerUnlocks();
             }
