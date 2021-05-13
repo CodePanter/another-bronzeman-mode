@@ -71,10 +71,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.GeneralSecurityException;
 import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
@@ -186,15 +189,14 @@ public class GroupBronzemanModePlugin extends Plugin
     private boolean onLeagueWorld;
     private boolean deleteConfirmed = false;
     private File playerFile;
-    private File playerFolder;
-
-    private Timer syncTimer;
+    public File playerFolder;
 
     @Inject
     GroundItemTracker giTracker;
 
     @Inject
     private ScheduledExecutorService executor;
+    private ScheduledFuture<?> syncTask;
 
     @Provides
     GroupBronzemanModeConfig provideConfig(ConfigManager configManager)
@@ -252,10 +254,10 @@ public class GroupBronzemanModePlugin extends Plugin
 
         giTracker.shutDown();
 
-        if (syncTimer != null)
+        if (syncTask != null)
         {
-            syncTimer.cancel();
-            syncTimer = null;
+            syncTask.cancel(false);
+            syncTask = null;
         }
 
         if (config.resetCommand())
@@ -291,10 +293,10 @@ public class GroupBronzemanModePlugin extends Plugin
         if (e.getGameState() == GameState.LOGIN_SCREEN)
         {
             itemEntries = null;
-            if (syncTimer != null)
+            if (syncTask != null)
             {
-                syncTimer.cancel();
-                syncTimer = null;
+                syncTask.cancel(false);
+                syncTask = null;
             }
         }
 
@@ -510,10 +512,10 @@ public class GroupBronzemanModePlugin extends Plugin
                 }
                 else
                 {
-                    if (syncTimer != null)
+                    if (syncTask != null)
                     {
-                        syncTimer.cancel();
-                        syncTimer = null;
+                        syncTask.cancel(false);
+                        syncTask = null;
                     }
                 }
             }
@@ -558,12 +560,11 @@ public class GroupBronzemanModePlugin extends Plugin
 
     private void startTimer()
     {
-        if (syncTimer != null)
+        if (syncTask != null)
         {
-            syncTimer.cancel();
+            syncTask.cancel(false);
         }
 
-        syncTimer = new Timer();
         TimerTask task = new TimerTask() {
             @Override
             public void run() {
@@ -572,7 +573,7 @@ public class GroupBronzemanModePlugin extends Plugin
                 savePlayerUnlocks();
             }
         };
-        syncTimer.scheduleAtFixedRate(task,5 * 60 * 1000, 5 * 60 * 1000);
+        syncTask = executor.scheduleAtFixedRate(task,5, 5, TimeUnit.MINUTES);
     }
 
     private void openBronzemanCategory(Widget widget) {
@@ -979,8 +980,20 @@ public class GroupBronzemanModePlugin extends Plugin
 
             if (config.syncGroup())
             {
-                gsSyncer.savePlayerUnlocks(unlockedItems);
-
+                executor.execute(() -> {
+                    try
+                    {
+                        gsSyncer.savePlayerUnlocks(unlockedItems);
+                    }
+                    catch (GeneralSecurityException e)
+                    {
+                        e.printStackTrace();
+                    }
+                    catch (IOException e)
+                    {
+                        e.printStackTrace();
+                    }
+                });
             }
         }
         catch (Exception e)
