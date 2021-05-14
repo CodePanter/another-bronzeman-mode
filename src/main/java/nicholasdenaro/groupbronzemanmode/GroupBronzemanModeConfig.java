@@ -159,4 +159,20 @@ public interface GroupBronzemanModeConfig extends Config
             position = 13
     )
     default boolean markBronzemanLoot(){return false;}
+
+    @ConfigItem(
+            keyName = "restrictLootLeftClick",
+            name = "Restrict Left Click",
+            description = "This will prevent you from picking up loot that is not yours.",
+            position = 14
+    )
+    default boolean restrictLootLeftClick(){return false;}
+
+    @ConfigItem(
+            keyName = "restrictLootMenu",
+            name = "Restrict Menu Take",
+            description = "This will prevent you from selecting the take menu option for loot that is not yours.",
+            position = 15
+    )
+    default boolean restrictLootMenu(){return false;}
 }
