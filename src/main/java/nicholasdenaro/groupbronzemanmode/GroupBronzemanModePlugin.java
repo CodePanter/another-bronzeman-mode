@@ -402,6 +402,20 @@ public class GroupBronzemanModePlugin extends Plugin
             return;
         }
 
+        if (event.getMenuOption().equals("Take") && !event.getMenuTarget().contains("<img=" + bronzemanIndicatorOffset + ">"))
+        {
+            if (config.restrictLootLeftClick() && !client.isMenuOpen())
+            {
+                event.consume();
+            }
+
+            if (config.restrictLootMenu() && client.isMenuOpen())
+            {
+                event.consume();
+            }
+            return;
+        }
+
         giTracker.onMenuOptionClicked(event);
     }
 
