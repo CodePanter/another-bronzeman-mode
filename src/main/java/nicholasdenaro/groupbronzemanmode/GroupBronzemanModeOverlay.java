@@ -90,7 +90,8 @@ public class GroupBronzemanModeOverlay extends Overlay
     // The 15 pixel gap between each drawn ground item.
     private static final int STRING_GAP = 15;
     private final TextComponent textComponent = new TextComponent();
-    private ImageComponent imageComponent;
+    private ImageComponent imageComponentIndicator;
+    private ImageComponent imageComponentUnlockableIndicator;
 
     @Inject
     private ItemManager itemManager;
@@ -120,7 +121,9 @@ public class GroupBronzemanModeOverlay extends Overlay
         this.includeFrame = false;
 
         BufferedImage image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_indicator.png");
-        imageComponent = new ImageComponent(image);
+        imageComponentIndicator = new ImageComponent(image);
+        image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_unlockable_indicator.png");
+        imageComponentUnlockableIndicator = new ImageComponent(image);
     }
 
     public void addItemUnlock(int itemId)
@@ -568,8 +571,14 @@ public class GroupBronzemanModeOverlay extends Overlay
         // Shift over to not be on top of the text
         int x = textX - 14 - (gconfig.groundItemTimers() == DespawnTimerMode.PIE && shiftIcon ? 16 : 0);
         int y = textY - 12;
-        imageComponent.setPreferredLocation(new java.awt.Point(x, y));
-        imageComponent.render(graphics);
+        ImageComponent drawIcon = imageComponentIndicator;
+        if (!plugin.getUnlockedItems().contains(item.getId()) && config.markUnlockableLoot())
+        {
+            drawIcon = imageComponentUnlockableIndicator;
+        }
+
+        drawIcon.setPreferredLocation(new java.awt.Point(x, y));
+        drawIcon.render(graphics);
     }
 
     private static final Duration DESPAWN_TIME_INSTANCE = Duration.ofMinutes(30);
