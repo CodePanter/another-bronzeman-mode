@@ -409,7 +409,7 @@ public class GroupBronzemanModePlugin extends Plugin
                 event.consume();
             }
 
-            if (config.restrictLootMenu())
+            if (config.restrictLootMenu() && client.isMenuOpen())
             {
                 event.consume();
             }
