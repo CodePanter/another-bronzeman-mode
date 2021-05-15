@@ -125,8 +125,14 @@ public class GoogleSheetsSyncer
     {
         try
         {
-            credential.refreshToken();
-            sendChatMessage("Refresh Google client token completed successfully.");
+            if (credential.refreshToken())
+            {
+                sendChatMessage("Refresh Google client token completed successfully.");
+            }
+            else
+            {
+                sendChatMessage("Google token expired, run !bmauth to continue syncing data.");
+            }
         }
         catch (Exception ex)
         {
@@ -157,6 +163,7 @@ public class GoogleSheetsSyncer
         }
 
         SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=1:1&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+
         int foundColumn = -1;
         int column = -1;
         String columnName = "";

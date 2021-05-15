@@ -84,6 +84,9 @@ public class GroundItemTracker
     @Inject
     private GroupBronzemanModePlugin plugin;
 
+    @Inject
+    private GroupBronzemanModeConfig bconfig;
+
     private GroundItemsConfig gconfig;
     @Getter(AccessLevel.PACKAGE)
     @Setter(AccessLevel.PACKAGE)
@@ -342,8 +345,15 @@ public class GroundItemTracker
 
             if (groundItem.isMine())
             {
+                String icon = "<img=" + plugin.bronzemanIndicatorOffset + ">";
+
+                if (!plugin.getUnlockedItems().contains(groundItem.getId()) && bconfig.markUnlockableLoot())
+                {
+                    icon = "<img=" + plugin.bronzemanUnlockableIndicatorOffset + ">";
+                }
+
                 String target = lastEntry.getTarget();
-                target += "<img=" + plugin.bronzemanIndicatorOffset + ">";
+                target += icon;
                 lastEntry.setTarget(target);
             }
 

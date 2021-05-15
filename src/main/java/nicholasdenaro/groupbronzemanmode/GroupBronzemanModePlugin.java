@@ -172,6 +172,7 @@ public class GroupBronzemanModePlugin extends Plugin
     @Inject
     private GroupBronzemanModeOverlay GroupBronzemanModeOverlay;
 
+    @Getter
     private List<Integer> unlockedItems;
 
     @Getter
@@ -185,7 +186,8 @@ public class GroupBronzemanModePlugin extends Plugin
 
     private List<String> namesBronzeman = new ArrayList<>();
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
-    public int bronzemanIndicatorOffset = -1; // offset for bronzeman icon
+    public int bronzemanIndicatorOffset = -1; // offset for bronzeman indicator
+    public int bronzemanUnlockableIndicatorOffset = -1;  // offset for bronzeman unlockable indicator
     private boolean onLeagueWorld;
     private boolean deleteConfirmed = false;
     private File playerFile;
@@ -1347,7 +1349,7 @@ public class GroupBronzemanModePlugin extends Plugin
             return;
         }
 
-        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 2);
+        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 3);
 
         unlockImage = ImageUtil.getResourceStreamFromClass(getClass(), "/item-unlocked.png");
         BufferedImage image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_icon.png");
@@ -1362,6 +1364,12 @@ public class GroupBronzemanModePlugin extends Plugin
 
         newModIcons[modIcons.length + 1] = indexedSprite;
         bronzemanIndicatorOffset = modIcons.length + 1;
+
+        image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_unlockable_indicator.png");
+        indexedSprite = ImageUtil.getImageIndexedSprite(image, client);
+
+        newModIcons[modIcons.length + 2] = indexedSprite;
+        bronzemanUnlockableIndicatorOffset = modIcons.length + 2;
 
         client.setModIcons(newModIcons);
     }
