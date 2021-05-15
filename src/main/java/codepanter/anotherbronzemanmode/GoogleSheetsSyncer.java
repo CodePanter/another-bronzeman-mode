@@ -23,7 +23,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package nicholasdenaro.groupbronzemanmode;
+package codepanter.anotherbronzemanmode;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.auth.oauth2.DataStoreCredentialRefreshListener;
@@ -63,7 +63,7 @@ public class GoogleSheetsSyncer
     private Client client;
 
     @Inject
-    GroupBronzemanModeConfig config;
+    AnotherBronzemanModeConfig config;
 
     private Credential credential;
 
@@ -79,9 +79,9 @@ public class GoogleSheetsSyncer
 
     //private boolean refreshStarted;
 
-    private GroupBronzemanModePlugin plugin;
+    private AnotherBronzemanModePlugin plugin;
 
-    public void authorize(GroupBronzemanModePlugin plugin)
+    public void authorize(AnotherBronzemanModePlugin plugin)
     {
         executor.execute(this::authorizactionCodeFlow);
         this.plugin = plugin;

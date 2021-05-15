@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, Tomas Slusny <slusnucky@gmail.com>
+ * Copyright (c) 2021, Nicholas Denaro <ndenarodev@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,47 +23,59 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package nicholasdenaro.groupbronzemanmode;
 
-import com.google.common.base.Strings;
-import com.google.common.cache.CacheLoader;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
+package codepanter.anotherbronzemanmode;
+
+import java.time.Instant;
 import javax.annotation.Nonnull;
-import net.runelite.client.util.WildcardMatcher;
+import javax.annotation.Nullable;
 
-class WildcardMatchLoader extends CacheLoader<NamedQuantity, Boolean>
+import lombok.*;
+import net.runelite.api.coords.WorldPoint;
+
+@Data
+@Builder
+class GroundItem
 {
-    private final List<ItemThreshold> itemThresholds;
+    private int id;
+    private int itemId;
+    private String name;
+    private int quantity;
+    private WorldPoint location;
+    private int height;
+    private int haPrice;
+    private int gePrice;
+    private int offset;
+    private boolean tradeable;
+    @Nonnull
+    private LootType lootType;
+    @Nullable
+    private Instant spawnTime;
+    private boolean stackable;
 
-    WildcardMatchLoader(List<String> configEntries)
+    @Getter
+    @Setter
+    private boolean isHidden;
+
+    int getHaPrice()
     {
-        this.itemThresholds = configEntries.stream()
-                .map(ItemThreshold::fromConfigEntry)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return haPrice * quantity;
     }
 
-    @Override
-    public Boolean load(@Nonnull final NamedQuantity key)
+    int getGePrice()
     {
-        if (Strings.isNullOrEmpty(key.getName()))
-        {
-            return false;
-        }
+        return gePrice * quantity;
+    }
 
-        final String filteredName = key.getName().trim();
+    boolean isMine()
+    {
+        return lootType != LootType.UNKNOWN;
+    }
 
-        for (final ItemThreshold entry : itemThresholds)
-        {
-            if (WildcardMatcher.matches(entry.getItemName(), filteredName)
-                    && entry.quantityHolds(key.getQuantity()))
-            {
-                return true;
-            }
-        }
-
-        return false;
+    @Value
+    static class GroundItemKey
+    {
+        private int itemId;
+        private WorldPoint location;
     }
 }

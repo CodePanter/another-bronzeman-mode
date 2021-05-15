@@ -23,7 +23,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package nicholasdenaro.groupbronzemanmode;
+package codepanter.anotherbronzemanmode;
 
 import lombok.RequiredArgsConstructor;
 import lombok.Value;

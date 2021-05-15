@@ -1,13 +1,13 @@
-package nicholasdenaro.groupbronzemanmode;
+package codepanter.anotherbronzemanmode;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class GroupBronzemanModePluginTest
+public class AnotherBronzemanModePluginTest
 {
     public static void main(String[] args) throws Exception
     {
-        ExternalPluginManager.loadBuiltin(GroupBronzemanModePlugin.class);
+        ExternalPluginManager.loadBuiltin(AnotherBronzemanModePlugin.class);
         RuneLite.main(args);
     }
 }

@@ -23,14 +23,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package nicholasdenaro.groupbronzemanmode;
+package codepanter.anotherbronzemanmode;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
-@ConfigGroup(GroupBronzemanModePlugin.CONFIG_GROUP)
-public interface GroupBronzemanModeConfig extends Config
+@ConfigGroup(AnotherBronzemanModePlugin.CONFIG_GROUP)
+public interface AnotherBronzemanModeConfig extends Config
 {
     @ConfigItem(
             keyName = "namesBronzeman",

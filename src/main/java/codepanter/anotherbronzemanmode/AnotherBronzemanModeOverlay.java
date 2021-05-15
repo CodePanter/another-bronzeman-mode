@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package nicholasdenaro.groupbronzemanmode;
+package codepanter.anotherbronzemanmode;
 
 import net.runelite.api.*;
 import net.runelite.api.Point;
@@ -62,15 +62,13 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.QuantityFormatter;
 
-import static nicholasdenaro.groupbronzemanmode.GroundItemTracker.MAX_QUANTITY;
-
 @Slf4j
-public class GroupBronzemanModeOverlay extends Overlay
+public class AnotherBronzemanModeOverlay extends Overlay
 {
     private ConfigManager configManager;
     private final Client client;
-    private final GroupBronzemanModePlugin plugin;
-    private final GroupBronzemanModeConfig config;
+    private final AnotherBronzemanModePlugin plugin;
+    private final AnotherBronzemanModeConfig config;
     private GroundItemsConfig gconfig;
 
     private Integer currentUnlock;
@@ -109,7 +107,7 @@ public class GroupBronzemanModeOverlay extends Overlay
     private DrawManager drawManager;
 
     @Inject
-    public GroupBronzemanModeOverlay(ConfigManager configManager, Client client, GroupBronzemanModePlugin plugin, GroupBronzemanModeConfig config)
+    public AnotherBronzemanModeOverlay(ConfigManager configManager, Client client, AnotherBronzemanModePlugin plugin, AnotherBronzemanModeConfig config)
     {
         super(plugin);
         this.client = client;
@@ -385,7 +383,7 @@ public class GroupBronzemanModeOverlay extends Overlay
 
         if (item.getQuantity() > 1)
         {
-            if (item.getQuantity() >= MAX_QUANTITY)
+            if (item.getQuantity() >= GroundItemTracker.MAX_QUANTITY)
             {
                 itemStringBuilder.append(" (Lots!)");
             }

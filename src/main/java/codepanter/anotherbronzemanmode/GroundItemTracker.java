@@ -24,7 +24,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package nicholasdenaro.groupbronzemanmode;
+package codepanter.anotherbronzemanmode;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheBuilder;
@@ -46,7 +46,6 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.input.KeyManager;
 import net.runelite.client.plugins.grounditems.GroundItemsConfig;
-import net.runelite.client.plugins.grounditems.config.MenuHighlightMode;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
@@ -62,7 +61,6 @@ import java.util.concurrent.TimeUnit;
 
 import static java.lang.Boolean.TRUE;
 import static net.runelite.client.plugins.grounditems.config.ItemHighlightMode.OVERLAY;
-import static net.runelite.client.plugins.grounditems.config.MenuHighlightMode.*;
 
 public class GroundItemTracker
 {
@@ -79,13 +77,13 @@ public class GroundItemTracker
     private KeyManager keyManager;
 
     @Inject
-    private GroupBronzemanModeInputListener inputListener;
+    private AnotherBronzemanModeInputListener inputListener;
 
     @Inject
-    private GroupBronzemanModePlugin plugin;
+    private AnotherBronzemanModePlugin plugin;
 
     @Inject
-    private GroupBronzemanModeConfig bconfig;
+    private AnotherBronzemanModeConfig bconfig;
 
     private GroundItemsConfig gconfig;
     @Getter(AccessLevel.PACKAGE)
