@@ -13,8 +13,23 @@ repositories {
 def runeLiteVersion = '1.7.7'
 
 dependencies {
-    compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
-    compile 'com.google.apis:google-api-services-sheets:v4-rev575-1.23.0'
+    compile ('com.google.oauth-client:google-oauth-client-jetty:1.23.0') {
+        exclude group: 'org.slf4j'
+        exclude group: 'com.google.guava'
+        exclude group: 'org.apache.httpcomponents'
+        exclude group: 'org.apache.commons'
+        exclude group: 'org.apache'
+        exclude group: 'commons-logging'
+        exclude group: 'commons-codec'
+    }
+    compile ('com.google.apis:google-api-services-sheets:v4-rev581-1.25.0'){
+        exclude group: 'com.google.guava'
+        exclude group: 'org.apache.httpcomponents'
+        exclude group: 'org.apache.commons'
+        exclude group: 'org.apache'
+        exclude group: 'commons-logging'
+        exclude group: 'commons-codec'
+    }
 
     compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
 

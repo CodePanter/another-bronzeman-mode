@@ -26,6 +26,7 @@
 package nicholasdenaro.groupbronzemanmode;
 
 import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.auth.oauth2.DataStoreCredentialRefreshListener;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -51,9 +52,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
@@ -78,7 +77,7 @@ public class GoogleSheetsSyncer
     @Inject
     private ChatMessageManager chatMessageManager;
 
-    private boolean refreshStarted;
+    //private boolean refreshStarted;
 
     private GroupBronzemanModePlugin plugin;
 
@@ -97,23 +96,25 @@ public class GoogleSheetsSyncer
 
             GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
+            FileDataStoreFactory dataStoreFactory = new FileDataStoreFactory(new java.io.File(Paths.get(plugin.playerFolder.getAbsolutePath(), TOKENS_DIRECTORY_PATH).toAbsolutePath().toString()));
             // Build flow and trigger user authorization request.
             GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
                     HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-                    .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(Paths.get(plugin.playerFolder.getAbsolutePath(), TOKENS_DIRECTORY_PATH).toAbsolutePath().toString())))
+                    .setDataStoreFactory(dataStoreFactory)
                     .setAccessType("offline")
+                    .addRefreshListener(new DataStoreCredentialRefreshListener(client.getUsername(), dataStoreFactory))
                     .build();
             LocalServerReceiver receiver = new LocalServerReceiver.Builder().setPort(8888).build();
             credential = new AuthorizationCodeInstalledApp(flow, receiver).authorize(client.getUsername());
             sendChatMessage("Authorization completed successfully.");
 
-            if (!refreshStarted)
-            {
-                executor.schedule(() -> {
-                    refreshToken();
-                }, credential.getExpiresInSeconds() / 2, TimeUnit.SECONDS);
-                refreshStarted = true;
-            }
+//            if (!refreshStarted)
+//            {
+//                executor.schedule(() -> {
+//                    refreshToken();
+//                }, credential.getExpiresInSeconds() / 2, TimeUnit.SECONDS);
+//                refreshStarted = true;
+//            }
         }
         catch (Exception ex)
         {
@@ -121,24 +122,24 @@ public class GoogleSheetsSyncer
         }
     }
 
-    public void refreshToken()
-    {
-        try
-        {
-            if (credential.refreshToken())
-            {
-                sendChatMessage("Refresh Google client token completed successfully.");
-            }
-            else
-            {
-                sendChatMessage("Google token expired, run !bmauth to continue syncing data.");
-            }
-        }
-        catch (Exception ex)
-        {
-            sendChatMessage("Unable to refresh Google client token.");
-        }
-    }
+//    public void refreshToken()
+//    {
+//        try
+//        {
+//            if (credential.refreshToken())
+//            {
+//                sendChatMessage("Refresh Google client token completed successfully.");
+//            }
+//            else
+//            {
+//                sendChatMessage("Google token expired, run !bmauth to continue syncing data.");
+//            }
+//        }
+//        catch (Exception ex)
+//        {
+//            sendChatMessage("Unable to refresh Google client token.");
+//        }
+//    }
 
     private void sendChatMessage(String chatMessage)
     {
