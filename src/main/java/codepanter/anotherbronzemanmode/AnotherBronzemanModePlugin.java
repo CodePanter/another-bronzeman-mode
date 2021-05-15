@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package nicholasdenaro.groupbronzemanmode;
+package codepanter.anotherbronzemanmode;
 
 import com.google.common.reflect.TypeToken;
 import com.google.common.util.concurrent.Runnables;
@@ -87,11 +87,11 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 
 @Slf4j
 @PluginDescriptor(
-        name = "Group Bronzeman Mode",
-        description = "Limits access to buying an item on the Grand Exchange until it is obtained otherwise. Enable group item syncing via Google Sheets (setup required). Also includes quality of life",
+        name = "Another Bronzeman Mode",
+        description = "Limits access to buying an item on the Grand Exchange until it is obtained otherwise.",
         tags = {"overlay", "bronzeman", "group"}
 )
-public class GroupBronzemanModePlugin extends Plugin
+public class AnotherBronzemanModePlugin extends Plugin
 {
     static final String CONFIG_GROUP = "anotherbronzemanmode";
     private static final String BM_UNLOCKS_STRING = "!bmunlocks";
@@ -167,10 +167,10 @@ public class GroupBronzemanModePlugin extends Plugin
     private ChatCommandManager chatCommandManager;
 
     @Inject
-    private GroupBronzemanModeConfig config;
+    private AnotherBronzemanModeConfig config;
 
     @Inject
-    private GroupBronzemanModeOverlay GroupBronzemanModeOverlay;
+    private AnotherBronzemanModeOverlay AnotherBronzemanModeOverlay;
 
     @Getter
     private List<Integer> unlockedItems;
@@ -201,9 +201,9 @@ public class GroupBronzemanModePlugin extends Plugin
     private ScheduledFuture<?> syncTask;
 
     @Provides
-    GroupBronzemanModeConfig provideConfig(ConfigManager configManager)
+    AnotherBronzemanModeConfig provideConfig(ConfigManager configManager)
     {
-        return configManager.getConfig(GroupBronzemanModeConfig.class);
+        return configManager.getConfig(AnotherBronzemanModeConfig.class);
     }
 
     @Override
@@ -215,7 +215,7 @@ public class GroupBronzemanModePlugin extends Plugin
         updateScreenshotUnlock();
         loadResources();
         unlockedItems = new ArrayList<>();
-        overlayManager.add(GroupBronzemanModeOverlay);
+        overlayManager.add(AnotherBronzemanModeOverlay);
         chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_COUNT_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_BACKUP_STRING, this::OnUnlocksBackupCommand);
@@ -249,7 +249,7 @@ public class GroupBronzemanModePlugin extends Plugin
         super.shutDown();
         itemEntries = null;
         unlockedItems = null;
-        overlayManager.remove(GroupBronzemanModeOverlay);
+        overlayManager.remove(AnotherBronzemanModeOverlay);
         chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(BM_COUNT_STRING);
         chatCommandManager.unregisterCommand(BM_BACKUP_STRING);
@@ -862,7 +862,7 @@ public class GroupBronzemanModePlugin extends Plugin
     public void queueItemUnlock(int itemId)
     {
         unlockedItems.add(itemId);
-        GroupBronzemanModeOverlay.addItemUnlock(itemId);
+        AnotherBronzemanModeOverlay.addItemUnlock(itemId);
         savePlayerUnlocks();// Save after every item to fail-safe logging out
     }
 
@@ -1035,7 +1035,7 @@ public class GroupBronzemanModePlugin extends Plugin
                 Set<Integer> newItems = gsSyncer.loadPlayerUnlocks(previousItems);
                 for (Integer item:newItems)
                 {
-                    GroupBronzemanModeOverlay.addItemUnlock(item);
+                    AnotherBronzemanModeOverlay.addItemUnlock(item);
                 }
                 unlockedItems.addAll(newItems);
             }
@@ -1055,7 +1055,7 @@ public class GroupBronzemanModePlugin extends Plugin
     {
         boolean screenshotUnlock = config.screenshotUnlock();
         boolean includeFrame = config.includeFrame();
-        GroupBronzemanModeOverlay.updateScreenshotUnlock(screenshotUnlock, includeFrame);
+        AnotherBronzemanModeOverlay.updateScreenshotUnlock(screenshotUnlock, includeFrame);
     }
 
     /**

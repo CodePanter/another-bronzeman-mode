@@ -10,7 +10,7 @@ repositories {
     mavenCentral()
 }
 
-def runeLiteVersion = '1.7.7'
+def runeLiteVersion = '1.7.8-SNAPSHOT'
 
 dependencies {
     compile ('com.google.oauth-client:google-oauth-client-jetty:1.23.0') {
@@ -43,8 +43,8 @@ dependencies {
     }
 }
 
-group = 'nicholasdenaro.groupbronzemanmode'
-version = '1.0'
+group = 'codepanter.anotherbronzemanmode'
+version = '1.1-SNAPSHOT'
 sourceCompatibility = '1.8'
 
 tasks.withType(JavaCompile) {
@@ -53,7 +53,7 @@ tasks.withType(JavaCompile) {
 
 jar {
     manifest {
-        attributes "Main-Class": "nicholasdenaro.groupbronzemanmode.GroupBronzemanModePluginTest"
+        attributes "Main-Class": "codepanter.anotherbronzemanmode.AnotherBronzemanModePluginTest"
     }
     from {
         configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
