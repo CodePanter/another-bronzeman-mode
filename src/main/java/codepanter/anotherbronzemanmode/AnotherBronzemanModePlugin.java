@@ -406,7 +406,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             return;
         }
 
-        if (event.getMenuOption().equals("Take") && !event.getMenuTarget().contains("<img=" + bronzemanIndicatorOffset + ">"))
+        if (event.getMenuOption().equals("Take") && (!event.getMenuTarget().contains("<img=" + bronzemanIndicatorOffset + ">") && !event.getMenuTarget().contains("<img=" + bronzemanUnlockableIndicatorOffset + ">")))
         {
             if (config.restrictLootLeftClick() && !client.isMenuOpen())
             {
@@ -578,7 +578,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (syncTask != null)
         {
-            syncTask.cancel(false);
+            return;
         }
 
         TimerTask task = new TimerTask() {
@@ -587,6 +587,7 @@ public class AnotherBronzemanModePlugin extends Plugin
                 sendChatMessage("Syncing Bronzeman Unlocks.");
                 loadPlayerUnlocks();
                 savePlayerUnlocks();
+                sendChatMessage("Syncing Bronzeman Finished.");
             }
         };
         syncTask = executor.scheduleAtFixedRate(task,5, 5, TimeUnit.MINUTES);
@@ -997,23 +998,13 @@ public class AnotherBronzemanModePlugin extends Plugin
             if (config.syncGroup())
             {
                 executor.execute(() -> {
-                    try
-                    {
-                        gsSyncer.savePlayerUnlocks(unlockedItems);
-                    }
-                    catch (GeneralSecurityException e)
-                    {
-                        e.printStackTrace();
-                    }
-                    catch (IOException e)
-                    {
-                        e.printStackTrace();
-                    }
+                    gsSyncer.savePlayerUnlocks(unlockedItems);
                 });
             }
         }
         catch (Exception e)
         {
+            sendChatMessage("Something went wrong with saving your unlocks.");
             e.printStackTrace();
         }
     }
