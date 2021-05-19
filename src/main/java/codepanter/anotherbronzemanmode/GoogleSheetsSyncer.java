@@ -26,7 +26,6 @@
 package codepanter.anotherbronzemanmode;
 
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.auth.oauth2.DataStoreCredentialRefreshListener;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -50,11 +49,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
-import java.security.GeneralSecurityException;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
@@ -67,7 +63,7 @@ public class GoogleSheetsSyncer
     @Inject
     AnotherBronzemanModeConfig config;
 
-    private Credential credential;
+    private Credential storedCredential;
 
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
     private static final List<String> SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS);
@@ -79,8 +75,6 @@ public class GoogleSheetsSyncer
     @Inject
     private ChatMessageManager chatMessageManager;
 
-    private ScheduledFuture<?> refreshTimer;
-
     private AnotherBronzemanModePlugin plugin;
 
     public void authorize(AnotherBronzemanModePlugin plugin)
@@ -91,7 +85,7 @@ public class GoogleSheetsSyncer
 
     private void authorizactionCodeFlow()
     {
-        if (credential != null)
+        if (storedCredential != null)
         {
             if (refreshToken())
             {
@@ -106,49 +100,33 @@ public class GoogleSheetsSyncer
 
             GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
-            FileDataStoreFactory dataStoreFactory = new FileDataStoreFactory(new java.io.File(Paths.get(plugin.playerFolder.getAbsolutePath(), TOKENS_DIRECTORY_PATH).toAbsolutePath().toString()));
+            FileDataStoreFactory dataStoreFactory = new FileDataStoreFactory(new File(Paths.get(plugin.playerFolder.getAbsolutePath(), TOKENS_DIRECTORY_PATH).toAbsolutePath().toString()));
             // Build flow and trigger user authorization request.
             GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
                     HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
                     .setDataStoreFactory(dataStoreFactory)
                     .setApprovalPrompt("force")
                     .setAccessType("offline")
-                    .addRefreshListener(new DataStoreCredentialRefreshListener(client.getUsername(), dataStoreFactory))
                     .build();
             LocalServerReceiver receiver = new LocalServerReceiver.Builder().setPort(8888).build();
-            credential = new AuthorizationCodeInstalledApp(flow, receiver).authorize(client.getUsername());
+            storedCredential = new AuthorizationCodeInstalledApp(flow, receiver).authorize(client.getUsername());
             sendChatMessage("Authorization completed successfully.");
 
-            if (credential.getRefreshToken() == null)
+            if (storedCredential.getRefreshToken() == null)
             {
                 sendChatMessage("No refresh token.");
             }
 
-            if (credential.getExpiresInSeconds() < 0)
+            if (storedCredential.getExpiresInSeconds() < 0)
             {
                 sendChatMessage("token already expired, refreshing...");
-                if (!credential.refreshToken())
+                if (!storedCredential.refreshToken())
                 {
                     sendChatMessage("Authorization failed for expired token. Try deleting token file or running !bmauth again.");
-                    clearCredentials();
                     return;
                 }
 
                 sendChatMessage("Refresh successful.");
-            }
-
-            if (refreshTimer == null)
-            {
-                if (credential.getExpiresInSeconds() < 30 * 60)
-                {
-                    if (!credential.refreshToken()) {
-
-                    }
-                }
-
-                refreshTimer = executor.schedule(() -> {
-                    refreshToken();
-                }, 30, TimeUnit.MINUTES);
             }
         }
         catch (Exception ex)
@@ -157,48 +135,39 @@ public class GoogleSheetsSyncer
         }
     }
 
-    private void clearCredentials()
-    {
-        refreshTimer.cancel(true);
-        refreshTimer = null;
-        credential = null;
-    }
-
     public boolean refreshToken()
     {
         try
         {
-            long expiresInSeconds = credential.getExpiresInSeconds();
-            if (credential.getAccessToken() == null)
+            long expiresInSeconds = storedCredential.getExpiresInSeconds();
+            if (storedCredential.getAccessToken() == null)
             {
-                clearCredentials();
-                sendChatMessage("Google token expired, run !bmauth to continue syncing data.");
-//                authorizactionCodeFlow();
+                sendChatMessage("No Google access token, run !bmauth to continue syncing data.");
             }
-            else if (credential.refreshToken())
+            else if (storedCredential.refreshToken())
             {
-                if (credential.getExpiresInSeconds() >= expiresInSeconds && expiresInSeconds > 30 * 60) {
+                if (storedCredential.getExpiresInSeconds() >= expiresInSeconds) {
                     sendChatMessage("Refresh Google client token completed successfully.");
+                    storedCredential.setAccessToken(storedCredential.getAccessToken());
                     return true;
                 }
                 else
                 {
-                    clearCredentials();
-                    sendChatMessage("Google token expired, run !bmauth to continue syncing data.");
+                    storedCredential = null;
+                    sendChatMessage("Token refresh failed, run !bmauth to continue syncing data.");
                 }
             }
             else
             {
-                clearCredentials();
+                storedCredential = null;
                 sendChatMessage("Google token expired, run !bmauth to continue syncing data.");
-//                authorizactionCodeFlow();
             }
         }
         catch (Exception ex)
         {
-            clearCredentials();
-            sendChatMessage("Unable to refresh Google client token. run !bmauth to continue syncing data.");
-//            authorizactionCodeFlow();
+            ex.printStackTrace();
+            storedCredential = null;
+            sendChatMessage("Exception occurred while refreshing token. run !bmauth to continue syncing data.");
         }
 
         return false;
@@ -220,14 +189,24 @@ public class GoogleSheetsSyncer
 
     public void savePlayerUnlocks(List<Integer> unlockedItems)
     {
-        if (credential == null)
+        if (storedCredential == null)
         {
             sendChatMessage("Use !bmauth to allow for syncing unlocks.");
             return;
         }
 
         try {
-            SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=1:1&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+            SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=1:1&access_token=%s", config.syncSheetId(), storedCredential.getAccessToken()));
+
+            if (response == null)
+            {
+                refreshToken();
+                response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=1:1&access_token=%s", config.syncSheetId(), storedCredential.getAccessToken()));
+                if (response == null)
+                {
+                    return;
+                }
+            }
 
             int foundColumn = -1;
             int column = -1;
@@ -245,7 +224,7 @@ public class GoogleSheetsSyncer
 
             if (foundColumn == -1) {
                 // Set row number for new player
-                response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=NewSlot&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+                response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=ROWS&ranges=NewSlot&access_token=%s", config.syncSheetId(), storedCredential.getAccessToken()));
                 columnName = response.valueRanges[0].values[0][0];
             }
 
@@ -255,26 +234,43 @@ public class GoogleSheetsSyncer
                             config.syncSheetId(),
                             columnName,
                             columnName,
-                            credential.getAccessToken()),
+                            storedCredential.getAccessToken()),
                     new PlayerDataForSheets(unlockedItems)
             );
         }
         catch (Exception ex)
         {
+            ex.printStackTrace();
             sendChatMessage("Error syncing saved unlocks. Try running !bmauth again.");
-            clearCredentials();
         }
     }
 
     public Set<Integer> loadPlayerUnlocks(Set<Integer> previousItems)
     {
-        if (credential == null)
+        if (storedCredential == null)
         {
             sendChatMessage("Use !bmauth to allow for syncing unlocks.");
-            return new HashSet<>();
+            return null;
         }
 
-        SheetsBatchGet response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=COLUMNS&ranges=Rollups!c:c&access_token=%s", config.syncSheetId(), credential.getAccessToken()));
+        SheetsBatchGet response = null;
+
+        try {
+            response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=COLUMNS&ranges=Rollups!c:c&access_token=%s", config.syncSheetId(), storedCredential.getAccessToken()));
+        }
+        catch (Exception ex)
+        {
+            response = null;
+        }
+
+        if (response == null)
+        {
+            refreshToken();
+            response = SheetsRequest(String.format("https://sheets.googleapis.com/v4/spreadsheets/%s/values:batchGet?majorDimension=COLUMNS&ranges=Rollups!c:c&access_token=%s", config.syncSheetId(), storedCredential.getAccessToken()));
+            if (response == null) {
+                return null;
+            }
+        }
 
         if (response.valueRanges[0].values != null)
         {
@@ -364,8 +360,8 @@ public class GoogleSheetsSyncer
         }
         catch(Exception ex)
         {
+            ex.printStackTrace();
             sendChatMessage("Failed to update synced unlocked items.");
-            System.out.println(ex.getMessage());
         }
     }
 }
