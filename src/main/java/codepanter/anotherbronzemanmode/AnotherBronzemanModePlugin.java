@@ -281,7 +281,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     @Subscribe
     public void onGameStateChanged(GameStateChanged e)
     {
-        if (e.getGameState() == GameState.LOGGED_IN)
+        if (e.getGameState() == GameState.LOGGING_IN || e.getGameState() == GameState.HOPPING)
         {
             setupPlayerFile();
             loadPlayerUnlocks();
@@ -406,7 +406,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             return;
         }
 
-        if (event.getMenuOption().equals("Take") && !event.getMenuTarget().contains("<img=" + bronzemanIndicatorOffset + ">"))
+        if (event.getMenuOption().equals("Take") && (!event.getMenuTarget().contains("<img=" + bronzemanIndicatorOffset + ">") && !event.getMenuTarget().contains("<img=" + bronzemanUnlockableIndicatorOffset + ">")))
         {
             if (config.restrictLootLeftClick() && !client.isMenuOpen())
             {
@@ -578,15 +578,17 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (syncTask != null)
         {
-            syncTask.cancel(false);
+            return;
         }
 
         TimerTask task = new TimerTask() {
             @Override
             public void run() {
                 sendChatMessage("Syncing Bronzeman Unlocks.");
-                loadPlayerUnlocks();
-                savePlayerUnlocks();
+                if (loadPlayerUnlocks())
+                {
+                    sendChatMessage("Syncing Bronzeman Finished.");
+                }
             }
         };
         syncTask = executor.scheduleAtFixedRate(task,5, 5, TimeUnit.MINUTES);
@@ -997,29 +999,19 @@ public class AnotherBronzemanModePlugin extends Plugin
             if (config.syncGroup())
             {
                 executor.execute(() -> {
-                    try
-                    {
-                        gsSyncer.savePlayerUnlocks(unlockedItems);
-                    }
-                    catch (GeneralSecurityException e)
-                    {
-                        e.printStackTrace();
-                    }
-                    catch (IOException e)
-                    {
-                        e.printStackTrace();
-                    }
+                    gsSyncer.savePlayerUnlocks(unlockedItems);
                 });
             }
         }
         catch (Exception e)
         {
+            sendChatMessage("Something went wrong with saving your unlocks.");
             e.printStackTrace();
         }
     }
 
     /* Loads a players unlock JSON every time they login */
-    private void loadPlayerUnlocks()
+    private boolean loadPlayerUnlocks()
     {
         unlockedItems.clear();
         try
@@ -1033,17 +1025,28 @@ public class AnotherBronzemanModePlugin extends Plugin
             if (config.syncGroup())
             {
                 Set<Integer> newItems = gsSyncer.loadPlayerUnlocks(previousItems);
+
+                if (newItems == null)
+                {
+                    return false;
+                }
+
+                if (newItems != null && newItems.size() > 0) {
+                    unlockedItems.addAll(newItems);
+                    savePlayerUnlocks();
+                }
                 for (Integer item:newItems)
                 {
                     AnotherBronzemanModeOverlay.addItemUnlock(item);
                 }
-                unlockedItems.addAll(newItems);
             }
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
+
+        return true;
     }
 
     private void updateNamesBronzeman()

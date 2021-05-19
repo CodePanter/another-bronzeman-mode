@@ -7,7 +7,7 @@ public class AnotherBronzemanModePluginTest
 {
     public static void main(String[] args) throws Exception
     {
-        ExternalPluginManager.loadBuiltin(AnotherBronzemanModePlugin.class);
+        //ExternalPluginManager.loadBuiltin(AnotherBronzemanModePlugin.class);
         RuneLite.main(args);
     }
 }
