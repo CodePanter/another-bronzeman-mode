@@ -105,6 +105,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     final int SELECTED_OPACITY = 200;
     final int UNSELECTED_OPACITY = 235;
 
+    private static final int GE_SEARCH_RESULTS = 50;
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
 
     private static final int COLLECTION_LOG_OPEN_OTHER = 2728;
@@ -741,7 +742,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     void killSearchResults()
     {
-        Widget grandExchangeSearchResults = client.getWidget(162, 53);
+        Widget grandExchangeSearchResults = client.getWidget(162, GE_SEARCH_RESULTS);
 
         if (grandExchangeSearchResults == null)
         {
