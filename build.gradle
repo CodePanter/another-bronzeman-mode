@@ -10,7 +10,7 @@ repositories {
     mavenCentral()
 }
 
-def runeLiteVersion = '1.7.8-SNAPSHOT'
+def runeLiteVersion = '1.7.8.1'
 
 dependencies {
     compile ('com.google.oauth-client:google-oauth-client-jetty:1.23.0') {
