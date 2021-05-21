@@ -1,5 +1,8 @@
 /*
+ * Copyright (c) 2017, Aria <aria@ar1as.space>
+ * Copyright (c) 2018, Adam <Adam@sigterm.info>
  * Copyright (c) 2019, CodePanter <https://github.com/codepanter>
+ * Copyright (c) 2021, Nicholas Denaro <ndenarodev@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,6 +33,8 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
+import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.events.PluginChanged;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.widgets.*;
@@ -37,6 +42,7 @@ import net.runelite.client.RuneLite;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.grounditems.GroundItemsConfig;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
@@ -65,9 +71,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.GeneralSecurityException;
 import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
@@ -79,7 +89,7 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 @PluginDescriptor(
         name = "Another Bronzeman Mode",
         description = "Limits access to buying an item on the Grand Exchange until it is obtained otherwise.",
-        tags = {"overlay", "bronzeman"}
+        tags = {"overlay", "bronzeman", "group"}
 )
 public class AnotherBronzemanModePlugin extends Plugin
 {
@@ -88,6 +98,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     private static final String BM_COUNT_STRING = "!bmcount";
     private static final String BM_RESET_STRING = "!bmreset";
     private static final String BM_BACKUP_STRING = "!bmbackup";
+    private static final String BM_AUTH = "!bmauth";
 
     final int COLLECTION_LOG_GROUP_ID = 621;
     final int COLLECTION_VIEW = 35;
@@ -148,6 +159,12 @@ public class AnotherBronzemanModePlugin extends Plugin
     private ChatMessageManager chatMessageManager;
 
     @Inject
+    private ConfigManager configManager;
+
+    @Inject
+    private GoogleSheetsSyncer gsSyncer;
+
+    @Inject
     private ChatCommandManager chatCommandManager;
 
     @Inject
@@ -156,6 +173,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     @Inject
     private AnotherBronzemanModeOverlay AnotherBronzemanModeOverlay;
 
+    @Getter
     private List<Integer> unlockedItems;
 
     @Getter
@@ -169,10 +187,19 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private List<String> namesBronzeman = new ArrayList<>();
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
+    public int bronzemanIndicatorOffset = -1; // offset for bronzeman indicator
+    public int bronzemanUnlockableIndicatorOffset = -1;  // offset for bronzeman unlockable indicator
     private boolean onLeagueWorld;
     private boolean deleteConfirmed = false;
     private File playerFile;
-    private File playerFolder;
+    public File playerFolder;
+
+    @Inject
+    GroundItemTracker giTracker;
+
+    @Inject
+    private ScheduledExecutorService executor;
+    private ScheduledFuture<?> syncTask;
 
     @Provides
     AnotherBronzemanModeConfig provideConfig(ConfigManager configManager)
@@ -193,6 +220,10 @@ public class AnotherBronzemanModePlugin extends Plugin
         chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_COUNT_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_BACKUP_STRING, this::OnUnlocksBackupCommand);
+        chatCommandManager.registerCommand(BM_AUTH, this::OnAuthCommand);
+
+        WorldItemSpawns.populateWorldSpawns(this.itemManager);
+        giTracker.startUp(configManager.getConfig(GroundItemsConfig.class));
 
         if (config.resetCommand())
         {
@@ -223,6 +254,15 @@ public class AnotherBronzemanModePlugin extends Plugin
         chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(BM_COUNT_STRING);
         chatCommandManager.unregisterCommand(BM_BACKUP_STRING);
+
+        giTracker.shutDown();
+
+        if (syncTask != null)
+        {
+            syncTask.cancel(false);
+            syncTask = null;
+        }
+
         if (config.resetCommand())
         {
             chatCommandManager.unregisterCommand(BM_RESET_STRING);
@@ -242,17 +282,28 @@ public class AnotherBronzemanModePlugin extends Plugin
     @Subscribe
     public void onGameStateChanged(GameStateChanged e)
     {
-        if (e.getGameState() == GameState.LOGGED_IN)
+        if (e.getGameState() == GameState.LOGGING_IN || e.getGameState() == GameState.HOPPING)
         {
             setupPlayerFile();
             loadPlayerUnlocks();
             loadResources();
             onLeagueWorld = isLeagueWorld(client.getWorld());
+            if (config.syncGroup())
+            {
+                startTimer();
+            }
         }
         if (e.getGameState() == GameState.LOGIN_SCREEN)
         {
             itemEntries = null;
+            if (syncTask != null)
+            {
+                syncTask.cancel(false);
+                syncTask = null;
+            }
         }
+
+        giTracker.onGameStateChanged(e);
     }
 
     @Subscribe
@@ -262,6 +313,10 @@ public class AnotherBronzemanModePlugin extends Plugin
         {
             setupPlayerFile();
             loadPlayerUnlocks();
+            if (config.syncGroup())
+            {
+                startTimer();
+            }
         }
     }
 
@@ -274,6 +329,51 @@ public class AnotherBronzemanModePlugin extends Plugin
 
         Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
         openBronzemanCategory(collectionViewHeader);
+    }
+
+    @Subscribe
+    public void onNpcLootReceived(NpcLootReceived npcLootReceived)
+    {
+        giTracker.onNpcLootReceived(npcLootReceived);
+    }
+
+    @Subscribe
+    public void onPlayerLootReceived(PlayerLootReceived playerLootReceived)
+    {
+        giTracker.onPlayerLootReceived(playerLootReceived);
+    }
+
+    @Subscribe
+    public void onItemSpawned(ItemSpawned itemSpawned)
+    {
+        giTracker.onItemSpawned(itemSpawned);
+    }
+
+    @Subscribe
+    public void onFocusChanged(FocusChanged focusChanged)
+    {
+        if (!focusChanged.isFocused())
+        {
+            giTracker.setHotKeyPressed(false);
+        }
+    }
+
+    @Subscribe
+    public void onItemDespawned(ItemDespawned itemDespawned)
+    {
+        giTracker.onItemDespawned(itemDespawned);
+    }
+
+    @Subscribe
+    public void onItemQuantityChanged(ItemQuantityChanged itemQuantityChanged)
+    {
+        giTracker.onItemQuantityChanged(itemQuantityChanged);
+    }
+
+    @Subscribe
+    public void onInteractingChanged(InteractingChanged event)
+    {
+        giTracker.onInteractingChanged(event);
     }
 
     /** Unlocks all new items that are currently not unlocked **/
@@ -306,6 +406,22 @@ public class AnotherBronzemanModePlugin extends Plugin
             sendChatMessage("You are a bronzeman. You stand alone...Sort of.");
             return;
         }
+
+        if (event.getMenuOption().equals("Take") && (!event.getMenuTarget().contains("<img=" + bronzemanIndicatorOffset + ">") && !event.getMenuTarget().contains("<img=" + bronzemanUnlockableIndicatorOffset + ">")))
+        {
+            if (config.restrictLootLeftClick() && !client.isMenuOpen())
+            {
+                event.consume();
+            }
+
+            if (config.restrictLootMenu() && client.isMenuOpen())
+            {
+                event.consume();
+            }
+            return;
+        }
+
+        giTracker.onMenuOptionClicked(event);
     }
 
     @Subscribe
@@ -348,8 +464,16 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     @Subscribe
+    public void onMenuEntryAdded(MenuEntryAdded event)
+    {
+        giTracker.onMenuEntryAdded(event);
+    }
+
+    @Subscribe
     public void onConfigChanged(ConfigChanged event)
     {
+        giTracker.onConfigChanged(event);
+
         if (event.getGroup().equals(CONFIG_GROUP))
         {
             if (event.getKey().equals("namesBronzeman"))
@@ -371,7 +495,104 @@ public class AnotherBronzemanModePlugin extends Plugin
                     chatCommandManager.unregisterCommand(BM_RESET_STRING);
                 }
             }
+            else if (event.getKey().equals("authorize"))
+            {
+                if (config.authorize())
+                {
+                   if (!config.oAuth2ClientDetails().equals(""))
+                   {
+                       File clientFile = new File(playerFolder, "group-bronzeman-mode-client-credentials.txt");
+                       try
+                       {
+                           PrintWriter w = new PrintWriter(clientFile);
+                           w.println(config.oAuth2ClientDetails());
+                           w.close();
+
+                           configManager.setConfiguration(CONFIG_GROUP, "oAuth2ClientDetails", "");
+                       }
+                       catch (FileNotFoundException e)
+                       {
+                           e.printStackTrace();
+                       }
+                   }
+                }
+            }
+            else if (event.getKey().equals("syncGroup"))
+            {
+                savePlayerUnlocks();
+                loadPlayerUnlocks();
+                savePlayerUnlocks();
+
+                if (config.syncGroup())
+                {
+                    startTimer();
+                }
+                else
+                {
+                    if (syncTask != null)
+                    {
+                        syncTask.cancel(false);
+                        syncTask = null;
+                    }
+                }
+            }
         }
+    }
+
+    public String getOAuth2ClientDetails()
+    {
+        String content = null;
+        File clientFile = new File(playerFolder, "group-bronzeman-mode-client-credentials.txt");
+        try
+        {
+            BufferedReader r = new BufferedReader(new FileReader(clientFile));
+            content = r.readLine();
+            r.close();
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        return content;
+    }
+
+    private void OnAuthCommand(ChatMessage chatMessage, String message)
+    {
+        if (!sentByPlayer(chatMessage))
+        {
+            return;
+        }
+
+        if (config.authorize())
+        {
+            try {
+                sendChatMessage("Authorizing Google client...");
+                gsSyncer.authorize(this);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    private void startTimer()
+    {
+        if (syncTask != null)
+        {
+            return;
+        }
+
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                sendChatMessage("Syncing Bronzeman Unlocks.");
+                if (loadPlayerUnlocks())
+                {
+                    sendChatMessage("Syncing Bronzeman Finished.");
+                }
+            }
+        };
+        syncTask = executor.scheduleAtFixedRate(task,5, 5, TimeUnit.MINUTES);
     }
 
     private void openBronzemanCategory(Widget widget) {
@@ -775,26 +996,58 @@ public class AnotherBronzemanModePlugin extends Plugin
             String json = GSON.toJson(unlockedItems);
             w.println(json);
             w.close();
+
+            if (config.syncGroup())
+            {
+                executor.execute(() -> {
+                    gsSyncer.savePlayerUnlocks(unlockedItems);
+                });
+            }
         }
         catch (Exception e)
         {
+            sendChatMessage("Something went wrong with saving your unlocks.");
             e.printStackTrace();
         }
     }
 
     /* Loads a players unlock JSON every time they login */
-    private void loadPlayerUnlocks()
+    private boolean loadPlayerUnlocks()
     {
         unlockedItems.clear();
         try
         {
             String json = new Scanner(playerFile).useDelimiter("\\Z").next();
-            unlockedItems.addAll(GSON.fromJson(json, new TypeToken<List<Integer>>(){}.getType()));
+            unlockedItems.addAll(GSON.fromJson(json, new TypeToken<List<Integer>>() {
+            }.getType()));
+
+            Set<Integer> previousItems = new HashSet<>(unlockedItems);
+
+            if (config.syncGroup())
+            {
+                Set<Integer> newItems = gsSyncer.loadPlayerUnlocks(previousItems);
+
+                if (newItems == null)
+                {
+                    return false;
+                }
+
+                if (newItems != null && newItems.size() > 0) {
+                    unlockedItems.addAll(newItems);
+                    savePlayerUnlocks();
+                }
+                for (Integer item:newItems)
+                {
+                    AnotherBronzemanModeOverlay.addItemUnlock(item);
+                }
+            }
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
+
+        return true;
     }
 
     private void updateNamesBronzeman()
@@ -1100,14 +1353,27 @@ public class AnotherBronzemanModePlugin extends Plugin
             return;
         }
 
+        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 3);
+
         unlockImage = ImageUtil.getResourceStreamFromClass(getClass(), "/item-unlocked.png");
         BufferedImage image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_icon.png");
         IndexedSprite indexedSprite = ImageUtil.getImageIndexedSprite(image, client);
 
         bronzemanIconOffset = modIcons.length;
 
-        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 1);
-        newModIcons[newModIcons.length - 1] = indexedSprite;
+        newModIcons[modIcons.length] = indexedSprite;
+
+        image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_indicator.png");
+        indexedSprite = ImageUtil.getImageIndexedSprite(image, client);
+
+        newModIcons[modIcons.length + 1] = indexedSprite;
+        bronzemanIndicatorOffset = modIcons.length + 1;
+
+        image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_unlockable_indicator.png");
+        indexedSprite = ImageUtil.getImageIndexedSprite(image, client);
+
+        newModIcons[modIcons.length + 2] = indexedSprite;
+        bronzemanUnlockableIndicatorOffset = modIcons.length + 2;
 
         client.setModIcons(newModIcons);
     }
