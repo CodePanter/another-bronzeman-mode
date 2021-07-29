@@ -89,14 +89,15 @@ public class AnotherBronzemanModePlugin extends Plugin
     private static final String BM_RESET_STRING = "!bmreset";
     private static final String BM_BACKUP_STRING = "!bmbackup";
 
+    final int COMBAT_ACHIEVEMENT_BUTTON = 20;
     final int COLLECTION_LOG_GROUP_ID = 621;
-    final int COLLECTION_VIEW = 35;
-    final int COLLECTION_VIEW_SCROLLBAR = 36;
+    final int COLLECTION_VIEW = 36;
+    final int COLLECTION_VIEW_SCROLLBAR = 37;
     final int COLLECTION_VIEW_HEADER = 19;
 
-    final int COLLECTION_VIEW_CATEGORIES_CONTAINER = 27;
-    final int COLLECTION_VIEW_CATEGORIES_TEXT = 32;
+    final int COLLECTION_VIEW_CATEGORIES_CONTAINER = 28;
     final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 33;
+    final int COLLECTION_VIEW_CATEGORIES_TEXT = 34;
     final int COLLECTION_VIEW_CATEGORIES_SCROLLBAR = 28;
 
     final int MENU_INSPECT = 2;
@@ -380,6 +381,8 @@ public class AnotherBronzemanModePlugin extends Plugin
         itemEntries = null;
         clientThread.invokeLater(() -> {
             Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
+            Widget combatAchievementsButton = client.getWidget(COLLECTION_LOG_GROUP_ID, COMBAT_ACHIEVEMENT_BUTTON);
+            combatAchievementsButton.setHidden(true);
             Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
             headerComponents[0].setText("Bronzeman Unlocks");
             headerComponents[1].setText("Unlocks: <col=ff0000>" + Integer.toString(unlockedItems.size()));
@@ -470,7 +473,6 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void updateList(Widget collectionView, String filter)
     {
-
         if (itemEntries == null)
         {
             itemEntries = Arrays.stream(collectionView.getDynamicChildren())
