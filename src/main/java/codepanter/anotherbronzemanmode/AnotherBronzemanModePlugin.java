@@ -170,7 +170,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private List<String> namesBronzeman = new ArrayList<>();
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
-    private boolean onLeagueWorld;
+    private boolean onSeasonalWorld;
     private boolean deleteConfirmed = false;
     private File playerFile;
     private File playerFolder;
@@ -185,7 +185,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     protected void startUp() throws Exception
     {
         super.startUp();
-        onLeagueWorld = false;
+        onSeasonalWorld = false;
         updateNamesBronzeman();
         updateScreenshotUnlock();
         loadResources();
@@ -204,9 +204,9 @@ public class AnotherBronzemanModePlugin extends Plugin
         {
             if (client.getGameState() == GameState.LOGGED_IN)
             {
-                onLeagueWorld = isLeagueWorld(client.getWorld());
-                // A player can not be a bronzeman on a league world.
-                if (!onLeagueWorld)
+                onSeasonalWorld = isSeasonalWorld(client.getWorld());
+                // A player can not be a bronzeman on a seasonal world.
+                if (!onSeasonalWorld)
                 {
                     setChatboxName(getNameChatbox());
                 }
@@ -231,8 +231,8 @@ public class AnotherBronzemanModePlugin extends Plugin
 
         clientThread.invoke(() ->
         {
-            // Cleanup is not required after having played on a league world.
-            if (client.getGameState() == GameState.LOGGED_IN && !onLeagueWorld)
+            // Cleanup is not required after having played on a seasonal world.
+            if (client.getGameState() == GameState.LOGGED_IN && !onSeasonalWorld)
             {
                 setChatboxName(getNameDefault());
             }
@@ -248,7 +248,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             setupPlayerFile();
             loadPlayerUnlocks();
             loadResources();
-            onLeagueWorld = isLeagueWorld(client.getWorld());
+            onSeasonalWorld = isSeasonalWorld(client.getWorld());
         }
         if (e.getGameState() == GameState.LOGIN_SCREEN)
         {
@@ -312,7 +312,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     @Subscribe
     public void onScriptCallbackEvent(ScriptCallbackEvent scriptCallbackEvent)
     {
-        if (scriptCallbackEvent.getEventName().equals(SCRIPT_EVENT_SET_CHATBOX_INPUT) && !onLeagueWorld)
+        if (scriptCallbackEvent.getEventName().equals(SCRIPT_EVENT_SET_CHATBOX_INPUT) && !onSeasonalWorld)
         {
             setChatboxName(getNameChatbox());
         }
@@ -340,7 +340,7 @@ public class AnotherBronzemanModePlugin extends Plugin
                 break;
             case PUBLICCHAT:
             case MODCHAT:
-                if (!onLeagueWorld && isChatPlayerBronzeman(name))
+                if (!onSeasonalWorld && isChatPlayerBronzeman(name))
                 {
                     addBronzemanIconToMessage(chatMessage);
                 }
@@ -835,12 +835,12 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /**
-     * Checks if the world is a League world.
+     * Checks if the world is a Seasonal world (Like leagues and seasonal deadman).
      *
      * @param worldNumber number of the world to check.
-     * @return boolean true/false if it is a league world or not.
+     * @return boolean true/false if it is a seasonal world or not.
      */
-    private boolean isLeagueWorld(int worldNumber)
+    private boolean isSeasonalWorld(int worldNumber)
     {
         WorldResult worlds = worldService.getWorlds();
         if (worlds == null)
@@ -849,7 +849,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
 
         World world = worlds.findWorld(worldNumber);
-        return world != null && world.getTypes().contains(WorldType.LEAGUE);
+        return world != null && world.getTypes().contains(WorldType.SEASONAL);
     }
 
     /**
@@ -994,7 +994,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
 
         int world = player.getWorld();
-        return !isLeagueWorld(world);
+        return !isSeasonalWorld(world);
     }
 
     /**
