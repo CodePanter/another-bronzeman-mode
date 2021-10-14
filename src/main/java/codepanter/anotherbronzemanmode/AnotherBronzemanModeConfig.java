@@ -94,4 +94,14 @@ public interface AnotherBronzemanModeConfig extends Config
     {
         return false;
     }
+
+    @ConfigItem(
+    	keyName = "hideUntradeables",
+		name = "Hide Untradeable Items",
+		description = "Hides untradeable items in the collection log and in chat/notifications",
+		position = 9
+	)
+	default boolean hideUntradeables() {
+    	return false;
+	}
 }
