@@ -401,6 +401,9 @@ public class AnotherBronzemanModePlugin extends Plugin
             int yIncrement = 40;
             int xIncrement = 42;
             for (Integer itemId : unlockedItems) {
+				boolean tradeable = itemManager.getItemComposition(itemId).isTradeable();
+				if (config.hideUntradeables() && !tradeable) continue;
+
                 addItemToCollectionLog(collectionView, itemId, x, y, index);
                 x = x + xIncrement;
                 index++;
@@ -624,12 +627,14 @@ public class AnotherBronzemanModePlugin extends Plugin
             int realItemId = itemManager.canonicalize(itemId);
             ItemComposition itemComposition = itemManager.getItemComposition(itemId);
             int noteId = itemComposition.getNote();
+            boolean tradeable = itemComposition.isTradeable();
             if (itemId != realItemId && noteId != 799) continue;  // The 799 signifies that it is a noted item
             if (i.getId() <= 1) continue;
             if (i.getQuantity() <= 0) continue;
             if (!unlockedItems.contains(realItemId))
             {
                 queueItemUnlock(realItemId);
+				if (config.hideUntradeables() && !tradeable) continue;
                 if (config.sendNotification())
                 {
                     notifier.notify("You have unlocked a new item: " + client.getItemDefinition(realItemId).getName() + ".");
@@ -646,7 +651,8 @@ public class AnotherBronzemanModePlugin extends Plugin
     public void queueItemUnlock(int itemId)
     {
         unlockedItems.add(itemId);
-        AnotherBronzemanModeOverlay.addItemUnlock(itemId);
+		boolean tradeable = itemManager.getItemComposition(itemId).isTradeable();
+		if (!(config.hideUntradeables() && !tradeable)) AnotherBronzemanModeOverlay.addItemUnlock(itemId);
         savePlayerUnlocks();// Save after every item to fail-safe logging out
     }
 
