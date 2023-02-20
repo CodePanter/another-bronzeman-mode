@@ -842,7 +842,6 @@ public class AnotherBronzemanModePlugin extends Plugin
         final MessageNode messageNode = chatMessage.getMessageNode();
         messageNode.setName(getNameWithIcon(bronzemanIconOffset, name));
 
-        chatMessageManager.update(messageNode);
         client.refreshChat();
     }
 
@@ -1100,7 +1099,6 @@ public class AnotherBronzemanModePlugin extends Plugin
 
         MessageNode messageNode = chatMessage.getMessageNode();
         messageNode.setRuneLiteFormatMessage(response);
-        chatMessageManager.update(messageNode);
         client.refreshChat();
     }
 
