@@ -146,6 +146,9 @@ public class AnotherBronzemanModePlugin extends Plugin
     private WorldService worldService;
 
     @Inject
+    private ConfigManager configManager;
+
+    @Inject
     private ChatMessageManager chatMessageManager;
 
     @Inject
@@ -172,8 +175,11 @@ public class AnotherBronzemanModePlugin extends Plugin
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
     private boolean onSeasonalWorld;
     private boolean deleteConfirmed = false;
-    private File playerFile;
-    private File playerFolder;
+    private File legacyFile;
+    private File legacyFolder;
+    private File profileFile;
+    private File profileFolder;
+    private String profileKey;
 
     @Provides
     AnotherBronzemanModeConfig provideConfig(ConfigManager configManager)
@@ -245,7 +251,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (e.getGameState() == GameState.LOGGED_IN)
         {
-            setupPlayerFile();
+            setupUnlockHistory();
             loadPlayerUnlocks();
             loadResources();
             onSeasonalWorld = isSeasonalWorld(client.getWorld());
@@ -261,7 +267,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         if (e.getPlugin() == this && client.getGameState() == GameState.LOGGED_IN)
         {
-            setupPlayerFile();
+            setupUnlockHistory();
             loadPlayerUnlocks();
         }
     }
@@ -779,7 +785,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     {
         try
         {
-            PrintWriter w = new PrintWriter(playerFile);
+            PrintWriter w = new PrintWriter(profileFile);
             String json = GSON.toJson(unlockedItems);
             w.println(json);
             w.close();
@@ -796,7 +802,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         unlockedItems.clear();
         try
         {
-            String json = new Scanner(playerFile).useDelimiter("\\Z").next();
+            String json = new Scanner(profileFile).useDelimiter("\\Z").next();
             unlockedItems.addAll(GSON.fromJson(json, new TypeToken<List<Integer>>(){}.getType()));
         }
         catch (Exception e)
@@ -1004,23 +1010,73 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     /**
-     * Sets up the playerFile variable, and makes the player file if needed.
+     * Sets up the profileFile variable, and makes the player file if needed.
      */
-    private void setupPlayerFile()
+    private void setupUnlockHistory()
     {
-        playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
-        if (!playerFolder.exists())
+        profileKey = configManager.getRSProfileKey();
+
+        // If profiles are not being used yet, we continue to use the legacy system.
+        if (profileKey == null)
         {
-            playerFolder.mkdirs();
+            setupLegacyFile();
         }
-        playerFile = new File(playerFolder, "another-bronzeman-mode-unlocks.txt");
-        if (!playerFile.exists())
+        else
+        {
+            setupProfileFile();
+        }
+    }
+
+    private void setupLegacyFile()
+    {
+        profileFolder = new File(RuneLite.RUNELITE_DIR, "profiles/" + client.getUsername());
+        if (!profileFolder.exists())
+        {
+            profileFolder.mkdirs();
+        }
+
+        profileFile = new File(profileFolder, "another-bronzeman-mode-unlocks.txt");
+        if (!profileFile.exists())
         {
             try {
-                playerFile.createNewFile();
+                profileFile.createNewFile();
                 unlockDefaultItems();
             } catch (IOException e) {
                 e.printStackTrace();
+            }
+        }
+    }
+
+    private void setupProfileFile()
+    {
+        legacyFolder = new File(RuneLite.RUNELITE_DIR, "profiles/" + client.getUsername());
+        legacyFile = new File(legacyFolder, "another-bronzeman-mode-unlocks.txt");
+
+        profileFolder = new File(RuneLite.RUNELITE_DIR, "profiles/" + profileKey);
+        if (!profileFolder.exists())
+        {
+            profileFolder.mkdirs();
+        }
+        profileFile = new File(profileFolder, "another-bronzeman-mode-unlocks.txt");
+        if (!profileFile.exists())
+        {
+            if (legacyFile.exists())
+            {
+                try {
+                    Files.copy(legacyFile.toPath(), profileFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+            }
+            else
+            {
+                try {
+                    profileFile.createNewFile();
+                    unlockDefaultItems();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -1060,7 +1116,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void resetItemUnlocks(){
         try {
-            playerFile.delete();
+            profileFile.delete();
             unlockedItems.clear();
             savePlayerUnlocks();
             unlockDefaultItems();
@@ -1084,11 +1140,11 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void backupItemUnlocks()
     {
-        Path originalPath = playerFile.toPath();
+        Path originalPath = profileFile.toPath();
         try {
             Calendar cal = Calendar.getInstance();
             SimpleDateFormat sdf = new SimpleDateFormat("MM_WW_HH_mm_ss");
-            Files.copy(originalPath, Paths.get(playerFolder.getPath() + "_" + sdf.format(cal.getTime()) + ".backup"),
+            Files.copy(originalPath, Paths.get(profileFolder.getPath() + "_" + sdf.format(cal.getTime()) + ".backup"),
                     StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             e.printStackTrace();
