@@ -27,7 +27,7 @@ package codepanter.anotherbronzemanmode;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.ItemComposition;
-import net.runelite.api.Point;
+import java.awt.Point;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -186,8 +186,8 @@ public class AnotherBronzemanModeOverlay extends Overlay
 
             // Evaluate the position of the game inside the frame
             final Point canvasOffset = clientUi.getCanvasOffset();
-            gameOffsetX = canvasOffset.getX();
-            gameOffsetY = canvasOffset.getY();
+            gameOffsetX = (int)canvasOffset.getX();
+            gameOffsetY = (int)canvasOffset.getY();
         }
 
         // Draw the game onto the screenshot
