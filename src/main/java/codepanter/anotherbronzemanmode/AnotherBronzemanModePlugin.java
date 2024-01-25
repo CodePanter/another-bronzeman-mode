@@ -33,6 +33,7 @@ import net.runelite.api.events.*;
 import net.runelite.client.events.PluginChanged;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.widgets.*;
+import net.runelite.api.widgets.ComponentID;
 import net.runelite.client.RuneLite;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -881,7 +882,7 @@ public class AnotherBronzemanModePlugin extends Plugin
      */
     private void setChatboxName(String name)
     {
-        Widget chatboxInput = client.getWidget(WidgetInfo.CHATBOX_INPUT);
+        Widget chatboxInput = client.getWidget(ComponentID.CHATBOX_INPUT);
         if (chatboxInput != null)
         {
             String text = chatboxInput.getText();
