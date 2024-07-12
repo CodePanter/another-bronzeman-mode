@@ -906,7 +906,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         if (player != null)
         {
             Widget chatboxInput = client.getWidget(ComponentID.CHATBOX_INPUT);
-            String namePlusChannel = "";
+            String namePlusChannel = player.getName();
             if (chatboxInput != null)
             {
                 String text = chatboxInput.getText();
