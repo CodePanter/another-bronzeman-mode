@@ -905,7 +905,18 @@ public class AnotherBronzemanModePlugin extends Plugin
         Player player = client.getLocalPlayer();
         if (player != null)
         {
-            return getNameWithIcon(bronzemanIconOffset, player.getName());
+            Widget chatboxInput = client.getWidget(ComponentID.CHATBOX_INPUT);
+            String namePlusChannel = player.getName();
+            if (chatboxInput != null)
+            {
+                String text = chatboxInput.getText();
+                int idx = text.indexOf(':');
+                if (idx != -1)
+                {
+                    namePlusChannel = text.substring(0,idx);
+                }
+            }
+            return getNameWithIcon(bronzemanIconOffset, namePlusChannel);
         }
         return null;
     }
