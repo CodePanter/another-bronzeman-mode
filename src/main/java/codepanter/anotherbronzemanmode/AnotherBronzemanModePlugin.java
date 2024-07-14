@@ -339,6 +339,8 @@ public class AnotherBronzemanModePlugin extends Plugin
             case PRIVATECHAT:
             case MODPRIVATECHAT:
                 // Note this is unable to change icon on PMs if they are not a friend or in friends chat
+            case CLAN_CHAT:
+            case CLAN_GUEST_CHAT:
             case FRIENDSCHAT:
                 if (isChatPlayerOnNormalWorld(name) && isChatPlayerBronzeman(name))
                 {
