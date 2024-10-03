@@ -22,31 +22,50 @@ public class CrabmanModeStorageTableRepo {
     private final List<Consumer<List<UnlockedItemEntity>>> listeners = new ArrayList<>();
     private String user;
 
-    public Map<Integer, UnlockedItemEntity> getUnlockedItems()
-    {
-        return unlockedItems;
-    }
+    // Used to flush items added to the list while the username is still missing for
+    // whatever reason
+    private final List<UnlockedItemEntity> unlockedItemQueue = new ArrayList<>();
 
-    public void initialize()
-    {
-        if (tableClient != null) {
-            return;
-        }
-        this.tableClient = new TableClientBuilder()
-                .connectionString(
-                        "stub")
-                .tableName("stub")
-                .buildClient();
-        unlockedItems.putAll(getAllUnlockedItems());
-
+    public CrabmanModeStorageTableRepo() {
         // Initialize the scheduler
         scheduler = Executors.newScheduledThreadPool(1);
         scheduleUnlocksUpdate();
     }
 
-    public void setUser(String user)
-    {
+    public Map<Integer, UnlockedItemEntity> getUnlockedItems() {
+        return unlockedItems;
+    }
+
+    public void updateConnection(String connectionString, String tableName) {
+        tableClient = new TableClientBuilder()
+                .connectionString(connectionString)
+                .tableName(tableName)
+                .buildClient();
+        try {
+            tableClient.createTable();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        unlockedItems.clear();
+        unlockedItems.putAll(getAllUnlockedItems());
+    }
+
+    public void close() {
+        tableClient = null;
+        unlockedItems.clear();
+    }
+
+    public void setUser(String user) {
         this.user = user;
+        flushQueue();
+    }
+
+    private void flushQueue() {
+        if (tableClient == null || user == null || user.isEmpty()) {
+            return;
+        }
+        unlockedItemQueue.forEach(this::insertUnlockedItem);
+        unlockedItemQueue.clear();
     }
 
     private boolean itemExists(String itemId) {
@@ -62,6 +81,10 @@ public class CrabmanModeStorageTableRepo {
     }
 
     public void insertUnlockedItem(UnlockedItemEntity unlockedItem) {
+        if (tableClient == null) {
+            unlockedItemQueue.add(unlockedItem);
+            return;
+        }
         if (itemExists(unlockedItem.getEntity().getRowKey())) {
             return;
         }
@@ -86,7 +109,7 @@ public class CrabmanModeStorageTableRepo {
         // Create OData filter
         String filter = "Timestamp gt datetime'" + acquiredOn.toString() + "'";
         ListEntitiesOptions listEntitiesOptions = new ListEntitiesOptions()
-            .setFilter(filter);
+                .setFilter(filter);
         this.tableClient.listEntities(listEntitiesOptions, Duration.ofSeconds(5), null).forEach(entity -> {
             UnlockedItemEntity unlockedItem = new UnlockedItemEntity(entity);
             unlockedItemsMap.put(unlockedItem.getItemId(), unlockedItem);
@@ -96,13 +119,13 @@ public class CrabmanModeStorageTableRepo {
 
     public void updateUnlockedItems() {
         OffsetDateTime acquiredOn = unlockedItems.values().stream()
-            .map(UnlockedItemEntity::getAcquiredOn)
-            .max(OffsetDateTime::compareTo)
-            .orElse(OffsetDateTime.now().minusMinutes(1));
+                .map(UnlockedItemEntity::getAcquiredOn)
+                .max(OffsetDateTime::compareTo)
+                .orElse(OffsetDateTime.now().minusMinutes(1));
         Map<Integer, UnlockedItemEntity> newUnlockedItems = getAllUnlockedAfter(acquiredOn);
         List<UnlockedItemEntity> newItemsUnlockedByOthers = newUnlockedItems.values().stream()
-            .filter(item -> !item.getAcquiredBy().equals(this.user))
-            .toList();
+                .filter(item -> !item.getAcquiredBy().equals(this.user))
+                .toList();
         synchronized (unlockedItems) {
             unlockedItems.putAll(newUnlockedItems);
         }
@@ -112,6 +135,9 @@ public class CrabmanModeStorageTableRepo {
     private void scheduleUnlocksUpdate() {
         scheduler.scheduleAtFixedRate(() -> {
             try {
+                if (tableClient == null) {
+                    return;
+                }
                 updateUnlockedItems();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -121,11 +147,6 @@ public class CrabmanModeStorageTableRepo {
 
     public void addUnlockedItemsListener(Consumer<List<UnlockedItemEntity>> listener) {
         listeners.add(listener);
-    }
-
-    public void clear()
-    {
-        unlockedItems.clear();
     }
 
     private void notifyListeners(List<UnlockedItemEntity> newUnlockedItems) {
