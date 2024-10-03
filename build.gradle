@@ -13,10 +13,11 @@ repositories {
 def runeLiteVersion = 'latest.release'
 
 dependencies {
-    compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
+    implementation group: 'com.azure', name: 'azure-data-tables', version: '12.4.5'
 
-    compileOnly 'org.projectlombok:lombok:1.18.4'
-    annotationProcessor 'org.projectlombok:lombok:1.18.4'
+    compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
+    compileOnly 'org.projectlombok:lombok:1.18.34'
+    annotationProcessor 'org.projectlombok:lombok:1.18.34'
 
     testImplementation 'junit:junit:4.12'
     testImplementation 'org.slf4j:slf4j-simple:1.7.12'
@@ -25,10 +26,16 @@ dependencies {
     }
 }
 
-group = 'codepanter.anotherbronzemanmode'
+group = 'mvdicarlo.crabmanmode'
 version = '1.1-SNAPSHOT'
 sourceCompatibility = '1.8'
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
+
+// jar {
+//     manifest {
+//         attributes "Main-Class": "mvdicarlo.crabmanmode.AnotherBronzemanModePluginTest"
+//     }
+// }

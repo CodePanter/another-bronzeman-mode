@@ -1,9 +1,13 @@
-# Another Bronzeman Mode RuneLite Plugin
-This plugin implements the custom gamemode called 'Bronzeman mode'.
-The idea of this gamemode lies somewhere between a 'normal' account and an 'Ironman' account; as you can't buy an item on the Grand Exchange until you have obtained that item through other means, such as getting it as a drop or buying it in a shop.
+# Crabman Mode Mode RuneLite Plugin
+This plugin implements the custom game mode called 'Group Bronzeman Mode'. (aka Crabman)
+The idea of this game mode lies somewhere between a 'normal' account and an 'Ironman' account; as you can't buy an item on the Grand Exchange until you have obtained that item through other means, such as getting it as a drop or buying it in a shop.
 
 The plugin enforces this rule by keeping track of all items you acquire, and only allowing you to buy this item.
 When the plugin is enabled for the first time it will unlock all items in your inventory, as well as unlock all items in your bank the next time you open it.
+
+This plugin requires an Azure Storage Data Table to be setup to allow for multiple users in your group to share an unlock list.
+
+Original implementation based off of [Another Bronzeman Mode](https://github.com/CodePanter/another-bronzeman-mode)
 
 ## Features
 
@@ -15,8 +19,6 @@ When the plugin is enabled for the first time it will unlock all items in your i
 - Supports adding a list of names of other Bronzeman accounts, and will provide them with (client side) Bronzeman chat icons.
 - Has settings for sending chat messages and notifications for every item unlock.
 - Allows the command '!bmcount' and '!bmunlocks' to get a total number for all unlocked items.
-- Has a setting to enable a '!bmreset' command, which deletes all current unlocked items and starts fresh.
-- Supports a '!bmbackup' command that makes a backup of the current unlocked items list.
 
 ## Screenshots
 
@@ -38,6 +40,4 @@ This interface comes with search functionality, as well as the ability to re-loc
 
 - First envisioned by [GUDI (Mod Ronan)](https://www.youtube.com/watch?v=GFNfa2saOJg)
 - [Initial](https://github.com/sethrem/bronzeman) code written by [Sethrem](https://github.com/sethrem)
-- Code improvements based on the [version](https://github.com/dekvall/bronzeman-mode) made by [Dekvall](https://github.com/dekvall)
-- Unlock-list backup feature and reset unlocks feature written by [Robin Withes](https://github.com/robinwithes)
-- Collection log integration and search functionality written by [Robin Withes](https://github.com/robinwithes)
+- Original implementation based off of [Another Bronzeman Mode](https://github.com/CodePanter/another-bronzeman-mode)
