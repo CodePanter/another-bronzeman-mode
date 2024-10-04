@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import com.azure.data.tables.TableClient;
 import com.azure.data.tables.TableClientBuilder;
@@ -143,7 +144,7 @@ public class CrabmanModeStorageTableRepo {
         Map<Integer, UnlockedItemEntity> newUnlockedItems = getAllUnlockedAfter(acquiredOn);
         List<UnlockedItemEntity> newItemsUnlockedByOthers = newUnlockedItems.values().stream()
                 .filter(item -> !item.getAcquiredBy().equals(this.user))
-                .toList();
+                .collect(Collectors.toList());
         synchronized (unlockedItems) {
             unlockedItems.putAll(newUnlockedItems);
         }
