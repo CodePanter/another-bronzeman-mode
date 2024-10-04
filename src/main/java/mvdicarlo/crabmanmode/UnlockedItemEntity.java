@@ -1,49 +1,62 @@
 package mvdicarlo.crabmanmode;
 
 import java.time.OffsetDateTime;
-
-import com.azure.data.tables.models.TableEntity;
+import java.util.HashMap;
+import java.util.Map;
 
 public class UnlockedItemEntity {
     public final static String PartitionKey = "UnlockedItem";
+    private String itemName;
+    private Integer itemId;
+    private String acquiredBy;
+    private OffsetDateTime acquiredOn;
 
-    private final TableEntity entity;
-
-    public UnlockedItemEntity(TableEntity entity) {
-        this.entity = entity;
+    public UnlockedItemEntity(String itemName, Integer itemId, String acquiredBy, OffsetDateTime acquiredOn) {
+        this.itemName = itemName;
+        this.itemId = itemId;
+        this.acquiredBy = acquiredBy;
+        this.acquiredOn = acquiredOn;
     }
 
     public UnlockedItemEntity(String itemName, Integer itemId, String acquiredBy) {
-        entity = new TableEntity(PartitionKey, itemId.toString());
-        entity.addProperty("AcquiredBy", acquiredBy);
-        entity.addProperty("ItemName", itemName);
+        this(itemName, itemId, acquiredBy, OffsetDateTime.now());
     }
 
     public Integer getItemId() {
-        return Integer.parseInt(entity.getProperty("RowKey").toString());
+        return itemId;
     }
 
     public String getAcquiredBy() {
-        Object acBy = entity.getProperty("AcquiredBy");
-        if (acBy == null) {
-            return "";
-        }
-        return acBy.toString();
+        return acquiredBy;
     }
 
-    public void setAcquiredBy(String acquiredBy) {
-        entity.addProperty("AcquiredBy", acquiredBy);
+    public String setAcquiredBy(String acquiredBy) {
+        return this.acquiredBy = acquiredBy;
     }
 
     public String getItemName() {
-        return entity.getProperty("ItemName").toString();
+        return itemName;
     }
 
     public OffsetDateTime getAcquiredOn() {
-        return entity.getTimestamp();
+        return acquiredOn;
     }
 
-    public TableEntity getEntity() {
-        return entity;
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("PartitionKey", PartitionKey);
+        map.put("RowKey", itemId.toString());
+        map.put("ItemName", itemName);
+        map.put("AcquiredBy", acquiredBy);
+        // map.put("Timestamp", acquiredOn.toString()); // Fine to allow null
+        return map;
+    }
+
+    public static UnlockedItemEntity fromMap(Map<String, Object> map) {
+        String itemName = (String) map.get("ItemName");
+        Integer itemId = Integer.parseInt((String) map.get("RowKey"));
+        String acquiredBy = (String) map.get("AcquiredBy");
+        OffsetDateTime acquiredOn = OffsetDateTime.parse((String) map.get("Timestamp"));
+        return new UnlockedItemEntity(itemName, itemId, acquiredBy, acquiredOn);
     }
 }

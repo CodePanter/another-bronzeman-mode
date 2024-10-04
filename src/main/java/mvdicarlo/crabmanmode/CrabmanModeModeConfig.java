@@ -16,13 +16,8 @@ public interface CrabmanModeModeConfig extends Config {
         return "";
     }
 
-    @ConfigItem(secret = true, keyName = "databaseString", name = "Azure Storage Account Connection String", position = 3, description = "The connection string for your group storage account.")
+    @ConfigItem(secret = true, keyName = "databaseString", name = "Azure Storage Account SAS URL", position = 3, description = "The SAS Url string for your group storage account.")
     default String databaseString() {
         return "";
-    }
-
-    @ConfigItem(keyName = "databaseTable", name = "Table Name", position = 3, description = "The name of the data table to use.")
-    default String databaseTable() {
-        return "unlockeditems";
     }
 }

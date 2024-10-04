@@ -16,7 +16,6 @@ repositories {
 def runeLiteVersion = 'latest.release'
 
 dependencies {
-    implementation group: 'com.azure', name: 'azure-data-tables', version: '12.4.5'
 	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
 
 	compileOnly 'org.projectlombok:lombok:1.18.30'

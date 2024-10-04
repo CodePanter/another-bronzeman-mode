@@ -438,7 +438,11 @@ public class CrabmanModeModePlugin extends Plugin {
         }
         UnlockedItemEntity unlockedItem = db.createNewUnlockedItem(itemId, client.getItemDefinition(itemId).getName());
         log.info("Unlocking item: " + unlockedItem.getItemName());
-        db.insertUnlockedItem(unlockedItem);
+        try {
+            db.insertUnlockedItem(unlockedItem);
+        } catch (Exception e) {
+            sendChatMessage("Failed to unlock item: " + unlockedItem.getItemName() + ". Check your SAS Token.");
+        }
     }
 
     /** Unlocks default items like a bond to a newly made profile **/
@@ -492,23 +496,19 @@ public class CrabmanModeModePlugin extends Plugin {
 
     private void updateAllowedCrabman() {
         enabledCrabman = config.enableCrabman();
-        // Note: Semi-unsafe but since we don't use the event it should be fine
+        // Note: Semi-unsafe to send null but since we don't use the event it should be
+        // fine
         onPlayerChanged(null);
     }
 
     private void initializeDatabase() {
         if (config.databaseString().isEmpty()) {
-            log.info("No database connection string provided.");
+            log.info("No SAS URL string provided.");
             db.close();
             return;
         }
-        if (config.databaseTable().isEmpty()) {
-            log.info("No database table name provided.");
-            db.close();
-            return;
-        }
-        log.info("Initializing database connection.");
-        db.updateConnection(config.databaseString(), config.databaseTable());
+        log.info("Initializing connection");
+        db.updateConnection(config.databaseString());
     }
 
     /**

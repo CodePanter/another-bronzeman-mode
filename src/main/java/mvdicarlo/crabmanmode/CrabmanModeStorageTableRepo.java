@@ -1,6 +1,5 @@
 package mvdicarlo.crabmanmode;
 
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,12 +11,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import com.azure.data.tables.TableClient;
-import com.azure.data.tables.TableClientBuilder;
-import com.azure.data.tables.models.ListEntitiesOptions;
-
 public class CrabmanModeStorageTableRepo {
-    private TableClient tableClient;
+    private AzureTableApi api;
     private final Map<Integer, UnlockedItemEntity> unlockedItems = new HashMap<>();
     private ScheduledExecutorService scheduler;
     private final List<Consumer<List<UnlockedItemEntity>>> listeners = new ArrayList<>();
@@ -31,28 +26,20 @@ public class CrabmanModeStorageTableRepo {
         return unlockedItems;
     }
 
-    public void updateConnection(String connectionString, String tableName) {
+    public void updateConnection(String sasUrl) {
         if (scheduler == null) {
             scheduler = Executors.newScheduledThreadPool(1);
             scheduleUnlocksUpdate();
             scheduleFlushQueue();
         }
-        tableClient = new TableClientBuilder()
-                .connectionString(connectionString)
-                .tableName(tableName)
-                .buildClient();
-        try {
-            tableClient.createTable();
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
+        api = new AzureTableApi(sasUrl);
         unlockedItems.clear();
         unlockedItems.putAll(getAllUnlockedItems());
     }
 
     public void close() {
         user = null;
-        tableClient = null;
+        api = null;
         unlockedItems.clear();
         if (scheduler != null) {
             scheduler.shutdown();
@@ -72,22 +59,28 @@ public class CrabmanModeStorageTableRepo {
     }
 
     public boolean isInitialized() {
-        return tableClient != null && user != null && !user.isEmpty();
+        return api != null && user != null && !user.isEmpty();
     }
 
     private void flushQueue() {
         if (isInitialized()) {
-            unlockedItemQueue.forEach(this::insertUnlockedItem);
+            unlockedItemQueue.forEach(item -> {
+                try {
+                    this.insertUnlockedItem(item);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
             unlockedItemQueue.clear();
         }
     }
 
-    private boolean itemExists(String itemId) {
+    private boolean itemExists(Integer itemId) {
         try {
-            if (unlockedItems.containsKey(Integer.parseInt(itemId))) {
+            if (unlockedItems.containsKey(itemId)) {
                 return true;
             }
-            return tableClient.getEntity(UnlockedItemEntity.PartitionKey, itemId) != null;
+            return api.getEntity(UnlockedItemEntity.PartitionKey, itemId.toString()) != null;
         } catch (Exception e) {
             return false;
         }
@@ -97,17 +90,19 @@ public class CrabmanModeStorageTableRepo {
         return new UnlockedItemEntity(itemName, itemId, user);
     }
 
-    public void insertUnlockedItem(UnlockedItemEntity unlockedItem) {
+    public void insertUnlockedItem(UnlockedItemEntity unlockedItem) throws Exception {
         System.out.println("Attempting to insert unlocked item: " + unlockedItem.getItemName());
         if (!isInitialized()) {
+            System.out.println("Not initialized, adding to queue");
             unlockedItemQueue.add(unlockedItem);
             return;
         }
-        if (itemExists(unlockedItem.getEntity().getRowKey())) {
+        if (itemExists(unlockedItem.getItemId())) {
+            System.out.println("Item already exists, skipping");
             return;
         }
         unlockedItem.setAcquiredBy(user);
-        tableClient.upsertEntity(unlockedItem.getEntity());
+        api.insertEntity(unlockedItem);
         List<UnlockedItemEntity> entities = new ArrayList<>();
         entities.add(unlockedItem);
         notifyListeners(entities);
@@ -115,10 +110,13 @@ public class CrabmanModeStorageTableRepo {
 
     public Map<Integer, UnlockedItemEntity> getAllUnlockedItems() {
         Map<Integer, UnlockedItemEntity> unlockedItemsMap = new HashMap<>();
-        this.tableClient.listEntities().forEach(entity -> {
-            UnlockedItemEntity unlockedItem = new UnlockedItemEntity(entity);
-            unlockedItemsMap.put(unlockedItem.getItemId(), unlockedItem);
-        });
+        try {
+            api.listEntities().forEach(unlockedItem -> {
+                unlockedItemsMap.put(unlockedItem.getItemId(), unlockedItem);
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return unlockedItemsMap;
     }
 
@@ -126,13 +124,14 @@ public class CrabmanModeStorageTableRepo {
         Map<Integer, UnlockedItemEntity> unlockedItemsMap = new HashMap<>();
 
         // Create OData filter
-        String filter = "Timestamp gt datetime'" + acquiredOn.toString() + "'";
-        ListEntitiesOptions listEntitiesOptions = new ListEntitiesOptions()
-                .setFilter(filter);
-        this.tableClient.listEntities(listEntitiesOptions, Duration.ofSeconds(5), null).forEach(entity -> {
-            UnlockedItemEntity unlockedItem = new UnlockedItemEntity(entity);
-            unlockedItemsMap.put(unlockedItem.getItemId(), unlockedItem);
-        });
+        String filter = "Timestamp%20gt%20datetime'" + acquiredOn.toString() + "'";
+        try {
+            api.listEntities(filter).forEach(unlockedItem -> {
+                unlockedItemsMap.put(unlockedItem.getItemId(), unlockedItem);
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return unlockedItemsMap;
     }
 
@@ -153,7 +152,11 @@ public class CrabmanModeStorageTableRepo {
 
     public void deleteUnlockedItem(int itemId) {
         if (isInitialized()) {
-            tableClient.deleteEntity(UnlockedItemEntity.PartitionKey, Integer.toString(itemId));
+            try {
+                api.deleteEntity(UnlockedItemEntity.PartitionKey, Integer.toString(itemId));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             unlockedItems.remove(itemId);
         }
     }

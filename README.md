@@ -27,14 +27,19 @@ To use the Group Bronzeman Mode RuneLite Plugin, you need to set up an Azure Sto
    - Click "Review + create" and then "Create" to finalize the creation of your storage account.
 
 2. **Configure the Storage Account**:
-   - Once the storage account is created, navigate to it in the Azure Portal.
-   - Go to the "Access keys" section under "Settings".
-   - Copy one of the connection strings. You will need this to configure the plugin.
+- Once the storage account is created, navigate to it in the Azure Portal.
+   1. Go to the **Data Storage** section and select **Tables**.
+   2. Create a new table if you haven't already.
+   3. Navigate to the **Storage Browser** section.
+   4. Locate your table, click on the **'...'** icon next to it, and select **Generate SAS**.
+   5. In the **Generate SAS** dialog:
+      - Ensure all permissions (Read, Write, Delete, etc.) are selected.
+      - Set an expiration time far in the future to avoid frequent renewals.
+   6. Click **Generate** and copy the generated SAS URL. You will need this to configure the plugin.
 
 3. **Configure the Plugin**:
    - Open the RuneLite client and go to the plugin configuration for Group Bronzeman Mode.
-   - Enter the connection string you copied earlier into the appropriate field.
-   - Specify the table name you created.
+   - Enter the SAS Url you copied earlier into the appropriate field.
 
 By following these steps, you will have a fully functional Azure Storage Account set up to use with the Group Bronzeman Mode RuneLite Plugin. This will allow you and your group members to share and synchronize item unlocks seamlessly.
 
