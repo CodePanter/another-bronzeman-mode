@@ -24,47 +24,81 @@
  */
 package mvdicarlo.crabmanmode;
 
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import javax.inject.Inject;
+
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Runnables;
+import com.google.inject.Provides;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.*;
-import net.runelite.api.events.*;
-import net.runelite.client.events.PluginChanged;
 import net.runelite.api.ChatMessageType;
-import net.runelite.api.widgets.*;
+import net.runelite.api.ChatPlayer;
+import net.runelite.api.Client;
+import net.runelite.api.Friend;
+import net.runelite.api.FriendsChatManager;
+import net.runelite.api.FriendsChatMember;
+import net.runelite.api.GameState;
+import net.runelite.api.IconID;
+import net.runelite.api.IndexedSprite;
+import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
+import net.runelite.api.ItemContainer;
+import net.runelite.api.ItemID;
+import net.runelite.api.MessageNode;
+import net.runelite.api.NameableContainer;
+import net.runelite.api.Player;
+import net.runelite.api.ScriptEvent;
+import net.runelite.api.ScriptID;
+import net.runelite.api.SoundEffectID;
+import net.runelite.api.SpriteID;
+import net.runelite.api.WorldType;
+import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.ScriptCallbackEvent;
+import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
+import net.runelite.api.widgets.JavaScriptCallback;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetPositionMode;
+import net.runelite.api.widgets.WidgetType;
+import net.runelite.client.Notifier;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatColorType;
+import net.runelite.client.chat.ChatCommandManager;
+import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.PluginChanged;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.WorldService;
+import net.runelite.client.game.chatbox.ChatboxPanelManager;
+import net.runelite.client.game.chatbox.ChatboxTextInput;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
-import net.runelite.api.ItemComposition;
-import net.runelite.api.ItemContainer;
-import net.runelite.client.Notifier;
-import net.runelite.client.game.ItemManager;
-import net.runelite.client.game.chatbox.ChatboxPanelManager;
-import net.runelite.client.game.chatbox.ChatboxTextInput;
-import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.config.ConfigManager;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
-import net.runelite.client.game.WorldService;
 import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.ChatMessageBuilder;
-import net.runelite.client.chat.QueuedMessage;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatCommandManager;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.util.ImageUtil;
-
-import javax.inject.Inject;
-import java.awt.image.BufferedImage;
-import java.util.*;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import com.google.common.collect.ImmutableSet;
-import com.google.inject.Provides;
 
 @Slf4j
 @PluginDescriptor(name = "Crabman Mode", description = "Modification of bronzeman mode plugin. Limits access to buying an item on the Grand Exchange until it is obtained otherwise.", tags = {
@@ -161,6 +195,7 @@ public class CrabmanModeModePlugin extends Plugin {
     private boolean deleteConfirmed = false;
 
     private final CrabmanModeStorageTableRepo db = new CrabmanModeStorageTableRepo();
+    private ScheduledExecutorService scheduler;
 
     @Provides
     CrabmanModeModeConfig provideConfig(ConfigManager configManager) {
@@ -187,6 +222,27 @@ public class CrabmanModeModePlugin extends Plugin {
         overlayManager.add(AnotherBronzemanModeOverlay);
         chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(BM_COUNT_STRING, this::OnUnlocksCountCommand);
+
+        scheduler = Executors.newScheduledThreadPool(1);
+        scheduler.scheduleAtFixedRate(() -> {
+            Player localPlayer = client.getLocalPlayer();
+            if (localPlayer == null) {
+                return;
+            }
+            String username = localPlayer.getName();
+            if (username == null || username.isEmpty()) {
+                return;
+            }
+            if (username.equals(enabledCrabman)) {
+                db.setUser(username);
+                if (!db.isInitialized()) {
+                    log.info(username + " is a crabman. Initializing database.");
+                    initializeDatabase();
+                }
+            } else {
+                db.close();
+            }
+        }, 0, 1, TimeUnit.SECONDS);
 
         clientThread.invoke(() -> {
             if (client.getGameState() == GameState.LOGGED_IN) {
@@ -220,7 +276,6 @@ public class CrabmanModeModePlugin extends Plugin {
     @Subscribe
     public void onGameStateChanged(GameStateChanged e) {
         if (e.getGameState() == GameState.LOGGED_IN) {
-            db.setUser(client.getLocalPlayer().getName());
             unlockDefaultItems();
             loadResources();
 
@@ -228,6 +283,7 @@ public class CrabmanModeModePlugin extends Plugin {
         }
         if (e.getGameState() == GameState.LOGIN_SCREEN) {
             itemEntries = null;
+            db.close();
         }
     }
 
@@ -599,15 +655,13 @@ public class CrabmanModeModePlugin extends Plugin {
             }
             boolean tradeable = itemManager.getItemComposition(itemId).isTradeable();
             if (!tradeable) {
+                log.info("Item is not tradeable: " + client.getItemDefinition(itemId).getName());
                 return;
             }
         }
-        // Just set it in case it was null before
-        db.setUser(client.getLocalPlayer().getName());
         UnlockedItemEntity unlockedItem = db.createNewUnlockedItem(itemId, client.getItemDefinition(itemId).getName());
+        log.info("Unlocking item: " + unlockedItem.getItemName());
         db.insertUnlockedItem(unlockedItem);
-        AnotherBronzemanModeOverlay.addItemUnlock(unlockedItem.getItemId());
-        // TODO discord?
     }
 
     /** Queues the removal of an unlocked item **/
@@ -732,12 +786,15 @@ public class CrabmanModeModePlugin extends Plugin {
     private void initializeDatabase() {
         if (config.databaseString().isEmpty()) {
             log.info("No database connection string provided.");
+            db.close();
             return;
         }
         if (config.databaseTable().isEmpty()) {
             log.info("No database table name provided.");
+            db.close();
             return;
         }
+        log.info("Initializing database connection.");
         db.updateConnection(config.databaseString(), config.databaseTable());
     }
 

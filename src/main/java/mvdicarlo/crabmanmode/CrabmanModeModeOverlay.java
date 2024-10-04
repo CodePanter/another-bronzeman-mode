@@ -24,28 +24,19 @@
  */
 package mvdicarlo.crabmanmode;
 
+import java.awt.Dimension;
+import java.awt.Graphics2D;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.inject.Inject;
+
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.ItemComposition;
-import java.awt.Point;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.util.ImageCapture;
-import net.runelite.client.ui.ClientUI;
-import net.runelite.client.ui.DrawManager;
-import net.runelite.client.util.ImageUploadStyle;
-
-import javax.inject.Inject;
-import javax.swing.SwingUtilities;
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.Consumer;
-import java.util.List;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class CrabmanModeModeOverlay extends Overlay {
@@ -58,23 +49,9 @@ public class CrabmanModeModeOverlay extends Overlay {
     private int displayY;
 
     private final List<Integer> itemUnlockList;
-    private boolean screenshotUnlock;
-    private boolean includeFrame;
 
     @Inject
     private ItemManager itemManager;
-
-    @Inject
-    private ImageCapture imageCapture;
-
-    @Inject
-    private ClientUI clientUi;
-
-    @Inject
-    private ScheduledExecutorService executor;
-
-    @Inject
-    private DrawManager drawManager;
 
     @Inject
     public CrabmanModeModeOverlay(Client client, CrabmanModeModePlugin plugin) {
@@ -82,19 +59,12 @@ public class CrabmanModeModeOverlay extends Overlay {
         this.client = client;
         this.plugin = plugin;
         this.itemUnlockList = new ArrayList<>();
-        this.screenshotUnlock = false;
-        this.includeFrame = false;
         setPosition(OverlayPosition.TOP_CENTER);
     }
 
     public void addItemUnlock(int itemId) {
         if (!itemUnlockList.contains(itemId))
             itemUnlockList.add(itemId);
-    }
-
-    public void updateScreenshotUnlock(boolean doScreenshotUnlock, boolean doIncludeFrame) {
-        screenshotUnlock = doScreenshotUnlock;
-        includeFrame = doIncludeFrame;
     }
 
     @Override

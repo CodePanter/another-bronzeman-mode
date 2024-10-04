@@ -1,9 +1,5 @@
 package mvdicarlo.crabmanmode;
 
-import com.azure.data.tables.TableClient;
-import com.azure.data.tables.TableClientBuilder;
-import com.azure.data.tables.models.ListEntitiesOptions;
-
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -14,6 +10,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+
+import com.azure.data.tables.TableClient;
+import com.azure.data.tables.TableClientBuilder;
+import com.azure.data.tables.models.ListEntitiesOptions;
 
 public class CrabmanModeStorageTableRepo {
     private TableClient tableClient;
@@ -26,17 +26,16 @@ public class CrabmanModeStorageTableRepo {
     // whatever reason
     private final List<UnlockedItemEntity> unlockedItemQueue = new ArrayList<>();
 
-    public CrabmanModeStorageTableRepo() {
-        // Initialize the scheduler
-        scheduler = Executors.newScheduledThreadPool(1);
-        scheduleUnlocksUpdate();
-    }
-
     public Map<Integer, UnlockedItemEntity> getUnlockedItems() {
         return unlockedItems;
     }
 
     public void updateConnection(String connectionString, String tableName) {
+        if (scheduler == null) {
+            scheduler = Executors.newScheduledThreadPool(1);
+            scheduleUnlocksUpdate();
+            scheduleFlushQueue();
+        }
         tableClient = new TableClientBuilder()
                 .connectionString(connectionString)
                 .tableName(tableName)
@@ -44,24 +43,32 @@ public class CrabmanModeStorageTableRepo {
         try {
             tableClient.createTable();
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         unlockedItems.clear();
         unlockedItems.putAll(getAllUnlockedItems());
     }
 
     public void close() {
+        user = null;
         tableClient = null;
         unlockedItems.clear();
+        if (scheduler != null) {
+            scheduler.shutdown();
+            scheduler = null;
+        }
     }
 
     public void setUser(String user) {
         this.user = user;
-        flushQueue();
+    }
+
+    public boolean isInitialized() {
+        return tableClient != null && user != null && !user.isEmpty();
     }
 
     private void flushQueue() {
-        if (tableClient == null || user == null || user.isEmpty()) {
+        if (!isInitialized()) {
             return;
         }
         unlockedItemQueue.forEach(this::insertUnlockedItem);
@@ -81,13 +88,14 @@ public class CrabmanModeStorageTableRepo {
     }
 
     public void insertUnlockedItem(UnlockedItemEntity unlockedItem) {
-        if (tableClient == null) {
+        if (!isInitialized()) {
             unlockedItemQueue.add(unlockedItem);
             return;
         }
         if (itemExists(unlockedItem.getEntity().getRowKey())) {
             return;
         }
+        unlockedItem.setAcquiredBy(user);
         tableClient.upsertEntity(unlockedItem.getEntity());
         List<UnlockedItemEntity> entities = new ArrayList<>();
         entities.add(unlockedItem);
@@ -135,14 +143,22 @@ public class CrabmanModeStorageTableRepo {
     private void scheduleUnlocksUpdate() {
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                if (tableClient == null) {
+                if (tableClient == null || user == null || user.isEmpty()) {
                     return;
                 }
                 updateUnlockedItems();
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, 0, 1, TimeUnit.MINUTES);
+        }, 0, 5, TimeUnit.MINUTES);
+    }
+
+    public void scheduleFlushQueue() {
+        scheduler.scheduleAtFixedRate(() -> {
+            if (user != null && !user.isEmpty() && !unlockedItemQueue.isEmpty()) {
+                flushQueue();
+            }
+        }, 0, 1, TimeUnit.SECONDS);
     }
 
     public void addUnlockedItemsListener(Consumer<List<UnlockedItemEntity>> listener) {
