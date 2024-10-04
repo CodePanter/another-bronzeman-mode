@@ -1,5 +1,5 @@
 # Crabman Mode Mode RuneLite Plugin
-This plugin implements the custom game mode called 'Group Bronzeman Mode'. (aka Crabman)
+This plugin implements the custom game mode called 'Group Bronzeman Mode'. (aka Crabman... by me)
 The idea of this game mode lies somewhere between a 'normal' account and an 'Ironman' account; as you can't buy an item on the Grand Exchange until you have obtained that item through other means, such as getting it as a drop or buying it in a shop.
 
 The plugin enforces this rule by keeping track of all items you acquire, and only allowing you to buy this item.
@@ -18,7 +18,7 @@ Original implementation based off of [Another Bronzeman Mode](https://github.com
 - Can optionally take screenshots of all new item unlocks.
 - Supports adding a list of names of other Bronzeman accounts, and will provide them with (client side) Bronzeman chat icons.
 - Has settings for sending chat messages and notifications for every item unlock.
-- Allows the command '!bmcount' and '!bmunlocks' to get a total number for all unlocked items.
+- Allows the command '!gbmcount' and '!bgmunlocks' to get a total number for all unlocked items.
 
 ## Screenshots
 

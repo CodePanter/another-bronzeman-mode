@@ -31,9 +31,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import javax.inject.Inject;
@@ -69,6 +66,7 @@ import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.PlayerChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.WidgetLoaded;
@@ -101,12 +99,13 @@ import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 
 @Slf4j
-@PluginDescriptor(name = "Crabman Mode", description = "Modification of bronzeman mode plugin. Limits access to buying an item on the Grand Exchange until it is obtained otherwise.", tags = {
+@PluginDescriptor(name = "Crabman Mode", description = "Modification of bronzeman mode plugin to support group bronzeman. Limits access to buying an item on the Grand Exchange until it is obtained otherwise.", tags = {
         "overlay", "bronzeman", "crabman", "group bronzeman" })
 public class CrabmanModeModePlugin extends Plugin {
     static final String CONFIG_GROUP = "crabmanmode";
-    private static final String BM_UNLOCKS_STRING = "!bmunlocks";
-    private static final String BM_COUNT_STRING = "!bmcount";
+    private static final String GBM_UNLOCKS_STRING = "!gbmunlocks";
+    private static final String GBM_COUNT_STRING = "!gbmcount";
+    private static final String GBM_RECENT_STRING = "!gbmrecent";
 
     final int COMBAT_ACHIEVEMENT_BUTTON = 20;
     final int COLLECTION_LOG_GROUP_ID = 621;
@@ -195,7 +194,6 @@ public class CrabmanModeModePlugin extends Plugin {
     private boolean deleteConfirmed = false;
 
     private final CrabmanModeStorageTableRepo db = new CrabmanModeStorageTableRepo();
-    private ScheduledExecutorService scheduler;
 
     @Provides
     CrabmanModeModeConfig provideConfig(ConfigManager configManager) {
@@ -203,8 +201,13 @@ public class CrabmanModeModePlugin extends Plugin {
     }
 
     private boolean isLoggedIntoCrabman() {
-        String playerName = client.getLocalPlayer().getName();
-        if (playerName == null || enabledCrabman == null || enabledCrabman.isEmpty()) {
+        Player player = client.getLocalPlayer();
+        if (player == null) {
+            return false;
+        }
+
+        String playerName = player.getName();
+        if (playerName == null || playerName.isEmpty() || enabledCrabman == null || enabledCrabman.isEmpty()) {
             return false;
         }
         return playerName.equals(enabledCrabman);
@@ -220,29 +223,9 @@ public class CrabmanModeModePlugin extends Plugin {
         loadResources();
         db.addUnlockedItemsListener((items) -> onItemsUnlocked(items));
         overlayManager.add(AnotherBronzemanModeOverlay);
-        chatCommandManager.registerCommand(BM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
-        chatCommandManager.registerCommand(BM_COUNT_STRING, this::OnUnlocksCountCommand);
-
-        scheduler = Executors.newScheduledThreadPool(1);
-        scheduler.scheduleAtFixedRate(() -> {
-            Player localPlayer = client.getLocalPlayer();
-            if (localPlayer == null) {
-                return;
-            }
-            String username = localPlayer.getName();
-            if (username == null || username.isEmpty()) {
-                return;
-            }
-            if (username.equals(enabledCrabman)) {
-                db.setUser(username);
-                if (!db.isInitialized()) {
-                    log.info(username + " is a crabman. Initializing database.");
-                    initializeDatabase();
-                }
-            } else {
-                db.close();
-            }
-        }, 0, 1, TimeUnit.SECONDS);
+        chatCommandManager.registerCommand(GBM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
+        chatCommandManager.registerCommand(GBM_COUNT_STRING, this::OnUnlocksCountCommand);
+        chatCommandManager.registerCommand(GBM_RECENT_STRING, this::OnRecentUnlocksCommand);
 
         clientThread.invoke(() -> {
             if (client.getGameState() == GameState.LOGGED_IN) {
@@ -261,8 +244,8 @@ public class CrabmanModeModePlugin extends Plugin {
         itemEntries = null;
         db.close();
         overlayManager.remove(AnotherBronzemanModeOverlay);
-        chatCommandManager.unregisterCommand(BM_UNLOCKS_STRING);
-        chatCommandManager.unregisterCommand(BM_COUNT_STRING);
+        chatCommandManager.unregisterCommand(GBM_UNLOCKS_STRING);
+        chatCommandManager.unregisterCommand(GBM_COUNT_STRING);
 
         clientThread.invoke(() -> {
             // Cleanup is not required after having played on a seasonal world.
@@ -296,7 +279,7 @@ public class CrabmanModeModePlugin extends Plugin {
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded e) {
-        if (e.getGroupId() != COLLECTION_LOG_GROUP_ID || config.moveCollectionLogUnlocks()) {
+        if (e.getGroupId() != COLLECTION_LOG_GROUP_ID || config.moveCollectionLogUnlocks() || !isLoggedIntoCrabman()) {
             return;
         }
 
@@ -373,6 +356,28 @@ public class CrabmanModeModePlugin extends Plugin {
     }
 
     @Subscribe
+    public void onPlayerChanged(PlayerChanged event) {
+        Player player = client.getLocalPlayer();
+        if (player != null) {
+            String username = player.getName();
+            if (username == null || username.isEmpty()) {
+                db.close();
+            } else if (!db.getUser().equals(username) && username.equals(enabledCrabman)) {
+                db.setUser(username);
+                if (!db.isInitialized()) {
+                    log.info(username + " is a crabman. Initializing database.");
+                    initializeDatabase();
+                }
+            } else if (!username.equals((enabledCrabman))) {
+                log.debug("Username does not match crabman name");
+                db.close();
+            }
+        } else {
+            db.close();
+        }
+    }
+
+    @Subscribe
     public void onConfigChanged(ConfigChanged event) {
         if (event.getGroup().equals(CONFIG_GROUP)) {
             if (event.getKey().equals("namesBronzeman")) {
@@ -394,7 +399,11 @@ public class CrabmanModeModePlugin extends Plugin {
             Widget combatAchievementsButton = client.getWidget(COLLECTION_LOG_GROUP_ID, COMBAT_ACHIEVEMENT_BUTTON);
             combatAchievementsButton.setHidden(true);
             Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
-            headerComponents[0].setText("Bronzeman Unlocks");
+            if (headerComponents.length == 0) {
+                return false;
+            }
+
+            headerComponents[0].setText("Group Bronzeman Unlocks");
             headerComponents[1].setText("Unlocks: <col=ff0000>" + Integer.toString(db.getUnlockedItems().size()));
             if (headerComponents.length > 2) {
                 headerComponents[2].setText("");
@@ -430,6 +439,7 @@ public class CrabmanModeModePlugin extends Plugin {
             client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar.getId(), collectionView.getId(), scrollHeight);
             collectionView.setScrollY(0);
             scrollbar.setScrollY(0);
+            return true;
         });
 
     }
@@ -640,9 +650,10 @@ public class CrabmanModeModePlugin extends Plugin {
         }
         unlockedItems.forEach((unlockedItem) -> {
             AnotherBronzemanModeOverlay.addItemUnlock(unlockedItem.getItemId());
-            notifier.notify("You have unlocked a new item: " + unlockedItem.getItemName() + ".");
-            // sendChatMessage("You have unlocked a new item: " + unlockedItem.getItemName()
+            // notifier.notify("You have unlocked a new item: " + unlockedItem.getItemName()
             // + ".");
+            sendChatMessage(unlockedItem.getAcquiredBy() + " has unlocked a new item: " + unlockedItem.getItemName()
+                    + ".");
         });
     }
 
@@ -666,7 +677,7 @@ public class CrabmanModeModePlugin extends Plugin {
 
     /** Queues the removal of an unlocked item **/
     public void queueItemDelete(int itemId) {
-        // TODO - Do we want this?
+        db.deleteUnlockedItem(itemId);
     }
 
     /** Unlocks default items like a bond to a newly made profile **/
@@ -702,7 +713,7 @@ public class CrabmanModeModePlugin extends Plugin {
             return; // This is not the 'other' page, as the first element is not 'Aerial Fishing'.
         }
 
-        if (categoryElements[categoryElements.length - 1].getText().contains("Bronzeman Unlocks")) {
+        if (categoryElements[categoryElements.length - 1].getText().contains("Group Bronzeman Unlocks")) {
             categoryElements[categoryElements.length - 1].setOpacity(UNSELECTED_OPACITY); // Makes sure the button is
                                                                                           // unselected by default.
             return; // The Bronzeman Unlocks category has already been added.
@@ -781,6 +792,8 @@ public class CrabmanModeModePlugin extends Plugin {
 
     private void updateAllowedCrabman() {
         enabledCrabman = config.enableCrabman();
+        // Note: Semi-unsafe but since we don't use the event it should be fine
+        onPlayerChanged(null);
     }
 
     private void initializeDatabase() {
@@ -976,17 +989,47 @@ public class CrabmanModeModePlugin extends Plugin {
     }
 
     private void OnUnlocksCountCommand(ChatMessage chatMessage, String message) {
-        if (!sentByPlayer(chatMessage)) {
+        if (!sentByPlayer(chatMessage) || !isLoggedIntoCrabman()) {
             return;
         }
 
+        Collection<UnlockedItemEntity> unlocked = db.getUnlockedItems().values();
+        long unlockedByMe = unlocked.stream()
+                .filter((item) -> item.getAcquiredBy().equals(client.getLocalPlayer().getName())).count();
+
         final ChatMessageBuilder builder = new ChatMessageBuilder()
                 .append(ChatColorType.HIGHLIGHT)
-                .append("You have unlocked ")
+                .append("Your group has unlocked ")
                 .append(ChatColorType.NORMAL)
-                .append(Integer.toString(db.getUnlockedItems().size()))
+                .append(Integer.toString(unlocked.size()))
+                .append("(" + unlockedByMe + " / " + unlocked.size() + ")")
                 .append(ChatColorType.HIGHLIGHT)
                 .append(" items.");
+
+        String response = builder.build();
+
+        MessageNode messageNode = chatMessage.getMessageNode();
+        messageNode.setRuneLiteFormatMessage(response);
+        client.refreshChat();
+    }
+
+    private void OnRecentUnlocksCommand(ChatMessage chatMessage, String message) {
+        if (!sentByPlayer(chatMessage) || !isLoggedIntoCrabman()) {
+            return;
+        }
+
+        Collection<UnlockedItemEntity> unlocked = db.getUnlockedItems().values();
+
+
+        final ChatMessageBuilder builder = new ChatMessageBuilder()
+            .append(ChatColorType.HIGHLIGHT)
+            .append("Your group has recently unlocked: ")
+            .append(ChatColorType.NORMAL)
+            .append(unlocked.stream()
+                .sorted(Comparator.comparing(UnlockedItemEntity::getAcquiredOn).reversed())
+                .limit(5)
+                .map(UnlockedItemEntity::getItemName)
+                .collect(Collectors.joining(", ")));
 
         String response = builder.build();
 

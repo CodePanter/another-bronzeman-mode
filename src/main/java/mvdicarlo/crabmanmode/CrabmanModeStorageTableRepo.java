@@ -63,20 +63,29 @@ public class CrabmanModeStorageTableRepo {
         this.user = user;
     }
 
+    public String getUser() {
+        if (user == null) {
+            return "";
+        }
+        return user;
+    }
+
     public boolean isInitialized() {
         return tableClient != null && user != null && !user.isEmpty();
     }
 
     private void flushQueue() {
-        if (!isInitialized()) {
-            return;
+        if (isInitialized()) {
+            unlockedItemQueue.forEach(this::insertUnlockedItem);
+            unlockedItemQueue.clear();
         }
-        unlockedItemQueue.forEach(this::insertUnlockedItem);
-        unlockedItemQueue.clear();
     }
 
     private boolean itemExists(String itemId) {
         try {
+            if (unlockedItems.containsKey(Integer.parseInt(itemId))) {
+                return true;
+            }
             return tableClient.getEntity(UnlockedItemEntity.PartitionKey, itemId) != null;
         } catch (Exception e) {
             return false;
@@ -88,6 +97,7 @@ public class CrabmanModeStorageTableRepo {
     }
 
     public void insertUnlockedItem(UnlockedItemEntity unlockedItem) {
+        System.out.println("Attempting to insert unlocked item: " + unlockedItem.getItemName());
         if (!isInitialized()) {
             unlockedItemQueue.add(unlockedItem);
             return;
@@ -140,13 +150,19 @@ public class CrabmanModeStorageTableRepo {
         notifyListeners(newItemsUnlockedByOthers);
     }
 
+    public void deleteUnlockedItem(int itemId) {
+        if (isInitialized()) {
+            tableClient.deleteEntity(UnlockedItemEntity.PartitionKey, Integer.toString(itemId));
+            unlockedItems.remove(itemId);
+        }
+    }
+
     private void scheduleUnlocksUpdate() {
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                if (tableClient == null || user == null || user.isEmpty()) {
-                    return;
+                if (isInitialized()) {
+                    updateUnlockedItems();
                 }
-                updateUnlockedItems();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -155,7 +171,7 @@ public class CrabmanModeStorageTableRepo {
 
     public void scheduleFlushQueue() {
         scheduler.scheduleAtFixedRate(() -> {
-            if (user != null && !user.isEmpty() && !unlockedItemQueue.isEmpty()) {
+            if (isInitialized() && !unlockedItemQueue.isEmpty()) {
                 flushQueue();
             }
         }, 0, 1, TimeUnit.SECONDS);

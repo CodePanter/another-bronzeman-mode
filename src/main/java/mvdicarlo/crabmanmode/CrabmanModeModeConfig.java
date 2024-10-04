@@ -21,7 +21,7 @@ public interface CrabmanModeModeConfig extends Config {
         return "";
     }
 
-    @ConfigItem(keyName = "databaseTable", name = "Azure StorageAccount Data Table Name", position = 3, description = "The name of the data table to use.")
+    @ConfigItem(keyName = "databaseTable", name = "Table Name", position = 3, description = "The name of the data table to use.")
     default String databaseTable() {
         return "unlockeditems";
     }
