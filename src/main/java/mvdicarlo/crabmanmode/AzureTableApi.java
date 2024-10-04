@@ -17,10 +17,10 @@ public class AzureTableApi {
     private final String sasUrl;
     private final Gson gson;
 
-    public AzureTableApi(String sasUrl) {
+    public AzureTableApi(String sasUrl, Gson gson) {
         this.httpClient = HttpClient.newHttpClient();
         this.sasUrl = sasUrl;
-        this.gson = new Gson();
+        this.gson = gson;
     }
 
     private static class AzureTableResponse {

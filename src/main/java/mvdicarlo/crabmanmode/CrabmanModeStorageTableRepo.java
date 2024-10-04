@@ -11,12 +11,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.google.gson.Gson;
+
 public class CrabmanModeStorageTableRepo {
     private AzureTableApi api;
     private final Map<Integer, UnlockedItemEntity> unlockedItems = new HashMap<>();
     private ScheduledExecutorService scheduler;
     private final List<Consumer<List<UnlockedItemEntity>>> listeners = new ArrayList<>();
     private String user;
+
+    private Gson gson;
 
     // Used to flush items added to the list while the username is still missing for
     // whatever reason
@@ -32,7 +36,7 @@ public class CrabmanModeStorageTableRepo {
             scheduleUnlocksUpdate();
             scheduleFlushQueue();
         }
-        api = new AzureTableApi(sasUrl);
+        api = new AzureTableApi(sasUrl, gson);
         unlockedItems.clear();
         unlockedItems.putAll(getAllUnlockedItems());
     }
@@ -45,6 +49,10 @@ public class CrabmanModeStorageTableRepo {
             scheduler.shutdown();
             scheduler = null;
         }
+    }
+
+    public void setGson(Gson gson) {
+        this.gson = gson;
     }
 
     public void setUser(String user) {

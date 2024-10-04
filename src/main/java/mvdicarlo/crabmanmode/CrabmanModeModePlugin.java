@@ -62,6 +62,7 @@ import java.util.stream.Collectors;
 import javax.inject.Inject;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.gson.Gson;
 import com.google.inject.Provides;
 
 import lombok.Getter;
@@ -194,6 +195,9 @@ public class CrabmanModeModePlugin extends Plugin {
     @Inject
     private ChatboxPanelManager chatboxPanelManager;
 
+    @Inject
+    private Gson gson;
+
     @Getter
     private BufferedImage unlockImage = null;
 
@@ -217,6 +221,7 @@ public class CrabmanModeModePlugin extends Plugin {
     protected void startUp() throws Exception {
         super.startUp();
         onSeasonalWorld = false;
+        db.setGson(gson);
         updateNamesBronzeman();
         updateAllowedCrabman();
         initializeDatabase();
