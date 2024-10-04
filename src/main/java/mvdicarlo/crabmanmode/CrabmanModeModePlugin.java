@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 import javax.inject.Inject;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.Runnables;
 import com.google.inject.Provides;
 
 import lombok.Getter;
@@ -57,24 +56,17 @@ import net.runelite.api.ItemID;
 import net.runelite.api.MessageNode;
 import net.runelite.api.NameableContainer;
 import net.runelite.api.Player;
-import net.runelite.api.ScriptEvent;
 import net.runelite.api.ScriptID;
-import net.runelite.api.SoundEffectID;
-import net.runelite.api.SpriteID;
 import net.runelite.api.WorldType;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PlayerChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
-import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetPositionMode;
-import net.runelite.api.widgets.WidgetType;
 import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
@@ -88,8 +80,6 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PluginChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.WorldService;
-import net.runelite.client.game.chatbox.ChatboxPanelManager;
-import net.runelite.client.game.chatbox.ChatboxTextInput;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -146,9 +136,6 @@ public class CrabmanModeModePlugin extends Plugin {
     private Client client;
 
     @Inject
-    private ChatboxPanelManager chatboxPanelManager;
-
-    @Inject
     private Notifier notifier;
 
     @Inject
@@ -183,34 +170,18 @@ public class CrabmanModeModePlugin extends Plugin {
 
     private static final String SCRIPT_EVENT_SET_CHATBOX_INPUT = "setChatboxInput";
 
-    private ChatboxTextInput searchInput;
-    private Widget searchButton;
-    private Collection<Widget> itemEntries;
-
     private List<String> namesBronzeman = new ArrayList<>();
     private String enabledCrabman = "";
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
     private boolean onSeasonalWorld;
-    private boolean deleteConfirmed = false;
 
     private final CrabmanModeStorageTableRepo db = new CrabmanModeStorageTableRepo();
+
+    private final CrabmanModeCategoryView collectionLog = new CrabmanModeCategoryView();
 
     @Provides
     CrabmanModeModeConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(CrabmanModeModeConfig.class);
-    }
-
-    private boolean isLoggedIntoCrabman() {
-        Player player = client.getLocalPlayer();
-        if (player == null) {
-            return false;
-        }
-
-        String playerName = player.getName();
-        if (playerName == null || playerName.isEmpty() || enabledCrabman == null || enabledCrabman.isEmpty()) {
-            return false;
-        }
-        return playerName.equals(enabledCrabman);
     }
 
     @Override
@@ -241,7 +212,6 @@ public class CrabmanModeModePlugin extends Plugin {
     @Override
     protected void shutDown() throws Exception {
         super.shutDown();
-        itemEntries = null;
         db.close();
         overlayManager.remove(AnotherBronzemanModeOverlay);
         chatCommandManager.unregisterCommand(GBM_UNLOCKS_STRING);
@@ -265,7 +235,6 @@ public class CrabmanModeModePlugin extends Plugin {
             onSeasonalWorld = isSeasonalWorld(client.getWorld());
         }
         if (e.getGameState() == GameState.LOGIN_SCREEN) {
-            itemEntries = null;
             db.close();
         }
     }
@@ -284,7 +253,7 @@ public class CrabmanModeModePlugin extends Plugin {
         }
 
         Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
-        openBronzemanCategory(collectionViewHeader);
+        collectionLog.openCollectionLog(collectionViewHeader, db);
     }
 
     /** Unlocks all new items that are currently not unlocked **/
@@ -303,20 +272,8 @@ public class CrabmanModeModePlugin extends Plugin {
 
         if ((event.getScriptId() == COLLECTION_LOG_OPEN_OTHER || event.getScriptId() == COLLECTION_LOG_ITEM_CLICK ||
                 event.getScriptId() == COLLECTION_LOG_DRAW_LIST) && config.moveCollectionLogUnlocks()) {
-            addBronzemanCategory();
+            initializeCollection();
         }
-    }
-
-    @Subscribe
-    public void onMenuOptionClicked(MenuOptionClicked event) {
-        // We do not care about this for our group ironmen
-        // if ((event.getMenuOption().equals("Trade with") ||
-        // event.getMenuOption().equals("Accept trade")) && !config.allowTrading()) {
-        // // Scold the player for attempting to trade as a bronzeman
-        // event.consume();
-        // sendChatMessage("You are a bronzeman. You stand alone...Sort of.");
-        // return;
-        // }
     }
 
     @Subscribe
@@ -390,239 +347,17 @@ public class CrabmanModeModePlugin extends Plugin {
         }
     }
 
-    private void openBronzemanCategory(Widget widget) {
-        widget.setOpacity(SELECTED_OPACITY);
-
-        itemEntries = null;
-        clientThread.invokeLater(() -> {
-            Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
-            Widget combatAchievementsButton = client.getWidget(COLLECTION_LOG_GROUP_ID, COMBAT_ACHIEVEMENT_BUTTON);
-            combatAchievementsButton.setHidden(true);
-            Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
-            if (headerComponents.length == 0) {
-                return false;
-            }
-
-            headerComponents[0].setText("Group Bronzeman Unlocks");
-            headerComponents[1].setText("Unlocks: <col=ff0000>" + Integer.toString(db.getUnlockedItems().size()));
-            if (headerComponents.length > 2) {
-                headerComponents[2].setText("");
-            }
-            createSearchButton(collectionViewHeader);
-
-            Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
-            Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
-            collectionView.deleteAllChildren();
-
-            int index = 0;
-            int x = 0;
-            int y = 0;
-            int yIncrement = 40;
-            int xIncrement = 42;
-            for (Integer itemId : db.getUnlockedItems().keySet()) {
-                boolean tradeable = itemManager.getItemComposition(itemId).isTradeable();
-                if (!tradeable)
-                    continue;
-
-                addItemToCollectionLog(collectionView, itemId, x, y, index);
-                x = x + xIncrement;
-                index++;
-                if (x > 210) {
-                    x = 0;
-                    y = y + yIncrement;
-                }
-            }
-
-            collectionView.setScrollHeight(y + 43); // y + image height (40) + 3 for padding at the bottom.
-            int scrollHeight = (collectionView.getScrollY() * y) / collectionView.getScrollHeight();
-            collectionView.revalidateScroll();
-            client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar.getId(), collectionView.getId(), scrollHeight);
-            collectionView.setScrollY(0);
-            scrollbar.setScrollY(0);
-            return true;
-        });
-
-    }
-
-    private void createSearchButton(Widget header) {
-        searchButton = header.createChild(-1, WidgetType.GRAPHIC);
-        searchButton.setSpriteId(SpriteID.GE_SEARCH);
-        searchButton.setOriginalWidth(18);
-        searchButton.setOriginalHeight(17);
-        searchButton.setXPositionMode(WidgetPositionMode.ABSOLUTE_RIGHT);
-        searchButton.setOriginalX(5);
-        searchButton.setOriginalY(20);
-        searchButton.setHasListener(true);
-        searchButton.setAction(1, "Open");
-        searchButton.setOnOpListener((JavaScriptCallback) e -> openSearch());
-        searchButton.setName("Search");
-        searchButton.revalidate();
-    }
-
-    private void openSearch() {
-        updateFilter("");
-        client.playSoundEffect(SoundEffectID.UI_BOOP);
-        searchButton.setAction(1, "Close");
-        searchButton.setOnOpListener((JavaScriptCallback) e -> closeSearch());
-        searchInput = chatboxPanelManager.openTextInput("Search unlock list")
-                .onChanged(s -> clientThread.invokeLater(() -> updateFilter(s.trim())))
-                .onClose(() -> {
-                    clientThread.invokeLater(() -> updateFilter(""));
-                    searchButton.setOnOpListener((JavaScriptCallback) e -> openSearch());
-                    searchButton.setAction(1, "Open");
-                })
-                .build();
-    }
-
-    private void closeSearch() {
-        updateFilter("");
-        chatboxPanelManager.close();
-        client.playSoundEffect(SoundEffectID.UI_BOOP);
-    }
-
-    private void updateFilter(String input) {
-        final Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
-
-        if (collectionView == null) {
-            return;
+    private boolean isLoggedIntoCrabman() {
+        Player player = client.getLocalPlayer();
+        if (player == null) {
+            return false;
         }
 
-        String filter = input.toLowerCase();
-        updateList(collectionView, filter);
-    }
-
-    private void updateList(Widget collectionView, String filter) {
-        if (itemEntries == null) {
-            itemEntries = Arrays.stream(collectionView.getDynamicChildren())
-                    .sorted(Comparator.comparing(Widget::getRelativeY))
-                    .collect(Collectors.toList());
+        String playerName = player.getName();
+        if (playerName == null || playerName.isEmpty() || enabledCrabman == null || enabledCrabman.isEmpty()) {
+            return false;
         }
-
-        itemEntries.forEach(w -> w.setHidden(true));
-
-        Collection<Widget> matchingItems = itemEntries.stream()
-                .filter(w -> w.getName().toLowerCase().contains(filter))
-                .collect(Collectors.toList());
-
-        int x = 0;
-        int y = 0;
-        for (Widget entry : matchingItems) {
-            entry.setHidden(false);
-            entry.setOriginalY(y);
-            entry.setOriginalX(x);
-            entry.revalidate();
-            x = x + 42;
-            if (x > 210) {
-                x = 0;
-                y = y + 40;
-            }
-        }
-
-        y += 43; // y + image height (40) + 3 for padding at the bottom.
-
-        int newHeight = 0;
-
-        if (collectionView.getScrollHeight() > 0) {
-            newHeight = (collectionView.getScrollY() * y) / collectionView.getScrollHeight();
-        }
-
-        collectionView.setScrollHeight(y);
-        collectionView.revalidateScroll();
-
-        Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
-        client.runScript(
-                ScriptID.UPDATE_SCROLLBAR,
-                scrollbar.getId(),
-                collectionView.getId(),
-                newHeight);
-    }
-
-    private void addItemToCollectionLog(Widget collectionView, Integer itemId, int x, int y, int index) {
-        String itemName = itemManager.getItemComposition(itemId).getName();
-        Widget newItem = collectionView.createChild(index, 5);
-        newItem.setContentType(0);
-        newItem.setItemId(itemId);
-        newItem.setItemQuantity(1);
-        newItem.setItemQuantityMode(0);
-        newItem.setModelId(-1);
-        newItem.setModelType(1);
-        newItem.setSpriteId(-1);
-        newItem.setBorderType(1);
-        newItem.setFilled(false);
-        newItem.setOriginalX(x);
-        newItem.setOriginalY(y);
-        newItem.setOriginalWidth(36);
-        newItem.setOriginalHeight(32);
-        newItem.setHasListener(true);
-        newItem.setAction(1, "Inspect");
-        newItem.setAction(2, "Remove");
-        newItem.setOnOpListener((JavaScriptCallback) e -> handleItemAction(itemId, itemName, e));
-        newItem.setName(itemName);
-        newItem.revalidate();
-    }
-
-    private void makeBronzemanWidget(Widget categories, Widget template, int position, int originalY) {
-        Widget bronzemanUnlocks = categories.createChild(position, template.getType());
-        bronzemanUnlocks.setText("Crabman Unlocks");
-        bronzemanUnlocks.setName("<col=ff9040>Crabman Unlocks</col>");
-        bronzemanUnlocks.setOpacity(UNSELECTED_OPACITY);
-        if (template.hasListener()) {
-            bronzemanUnlocks.setHasListener(true);
-            bronzemanUnlocks.setAction(1, "View");
-            bronzemanUnlocks.setOnOpListener((JavaScriptCallback) e -> openBronzemanCategory(bronzemanUnlocks));
-        }
-        bronzemanUnlocks.setBorderType(template.getBorderType());
-        bronzemanUnlocks.setItemId(template.getItemId());
-        bronzemanUnlocks.setSpriteId(template.getSpriteId());
-        bronzemanUnlocks.setOriginalHeight(template.getOriginalHeight());
-        bronzemanUnlocks.setOriginalWidth((template.getOriginalWidth()));
-        bronzemanUnlocks.setOriginalX(template.getOriginalX());
-        bronzemanUnlocks.setOriginalY(originalY);
-        bronzemanUnlocks.setXPositionMode(template.getXPositionMode());
-        bronzemanUnlocks.setYPositionMode(template.getYPositionMode());
-        bronzemanUnlocks.setContentType(template.getContentType());
-        bronzemanUnlocks.setItemQuantity(template.getItemQuantity());
-        bronzemanUnlocks.setItemQuantityMode(template.getItemQuantityMode());
-        bronzemanUnlocks.setModelId(template.getModelId());
-        bronzemanUnlocks.setModelType(template.getModelType());
-        bronzemanUnlocks.setBorderType(template.getBorderType());
-        bronzemanUnlocks.setFilled(template.isFilled());
-        bronzemanUnlocks.setTextColor(template.getTextColor());
-        bronzemanUnlocks.setFontId(template.getFontId());
-        bronzemanUnlocks.setTextShadowed(template.getTextShadowed());
-        bronzemanUnlocks.setWidthMode(template.getWidthMode());
-        bronzemanUnlocks.setYTextAlignment(template.getYTextAlignment());
-        bronzemanUnlocks.revalidate();
-    }
-
-    private void handleItemAction(Integer itemId, String itemName, ScriptEvent event) {
-        switch (event.getOp()) {
-            case MENU_INSPECT:
-                final ChatMessageBuilder examination = new ChatMessageBuilder()
-                        .append(ChatColorType.NORMAL)
-                        .append("This is an unlocked item called '" + itemName + "'.");
-
-                chatMessageManager.queue(QueuedMessage.builder()
-                        .type(ChatMessageType.ITEM_EXAMINE)
-                        .runeLiteFormattedMessage(examination.build())
-                        .build());
-                break;
-            case MENU_DELETE:
-                clientThread.invokeLater(() -> confirmDeleteItem(itemId, itemName));
-                break;
-        }
-    }
-
-    private void confirmDeleteItem(Integer itemId, String itemName) {
-        chatboxPanelManager.openTextMenuInput("Do you want to re-lock: " + itemName)
-                .option("1. Confirm re-locking of item", () -> clientThread.invoke(() -> {
-                    deleteConfirmed = true;
-                    queueItemDelete(itemId);
-                    sendChatMessage("Item '" + itemName + "' is no longer unlocked.");
-                    deleteConfirmed = false;
-                }))
-                .option("2. Cancel", Runnables::doNothing)
-                .build();
+        return playerName.equals(enabledCrabman);
     }
 
     /** Unlocks all items in the given item container. **/
@@ -675,11 +410,6 @@ public class CrabmanModeModePlugin extends Plugin {
         db.insertUnlockedItem(unlockedItem);
     }
 
-    /** Queues the removal of an unlocked item **/
-    public void queueItemDelete(int itemId) {
-        db.deleteUnlockedItem(itemId);
-    }
-
     /** Unlocks default items like a bond to a newly made profile **/
     private void unlockDefaultItems() {
         queueItemUnlock(ItemID.COINS_995, true);
@@ -699,69 +429,8 @@ public class CrabmanModeModePlugin extends Plugin {
                         .build());
     }
 
-    void addBronzemanWidget(int widgetId) {
-        Widget logCategories = client.getWidget(COLLECTION_LOG_GROUP_ID, widgetId);
-        Widget[] categoryElements = logCategories.getDynamicChildren();
-        if (categoryElements.length == 0) {
-            return; // The category elements have not been loaded yet.
-        }
-
-        Widget aerialFishing = categoryElements[0]; // The aerial fishing category is used as a template.
-
-        if (!(aerialFishing.getText().contains("Aerial Fishing")
-                || aerialFishing.getName().contains("Aerial Fishing"))) {
-            return; // This is not the 'other' page, as the first element is not 'Aerial Fishing'.
-        }
-
-        if (categoryElements[categoryElements.length - 1].getText().contains("Group Bronzeman Unlocks")) {
-            categoryElements[categoryElements.length - 1].setOpacity(UNSELECTED_OPACITY); // Makes sure the button is
-                                                                                          // unselected by default.
-            return; // The Bronzeman Unlocks category has already been added.
-        }
-
-        int originalY = categoryElements.length * 15;
-        makeBronzemanWidget(logCategories, aerialFishing, categoryElements.length, originalY);
-
-        logCategories.setHeightMode(0);
-        logCategories.setOriginalHeight(originalY + 18);
-        logCategories.revalidate();
-    }
-
-    void updateContainerScroll() {
-        Widget categoryContainer = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_CONTAINER);
-        Widget logCategories = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_RECTANGLE);
-        Widget[] categoryElements = logCategories.getDynamicChildren();
-        int originalHeight = 315; // 21 elements * 15 height
-        int scrollHeight = categoryElements.length * 18;
-
-        int newHeight = 0;
-        if (categoryContainer.getScrollHeight() > 0 && categoryContainer.getScrollHeight() != scrollHeight) {
-            newHeight = (categoryContainer.getScrollY() * scrollHeight) / categoryContainer.getScrollHeight();
-        }
-
-        categoryContainer.setHeightMode(0);
-        categoryContainer.setOriginalHeight(originalHeight);
-        categoryContainer.setScrollHeight(scrollHeight);
-        categoryContainer.revalidate();
-        categoryContainer.revalidateScroll();
-
-        Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_SCROLLBAR);
-
-        client.runScript(
-                ScriptID.UPDATE_SCROLLBAR,
-                scrollbar.getId(),
-                categoryContainer.getId(),
-                newHeight);
-    }
-
-    void addBronzemanCategory() {
-        clientThread.invokeLater(() -> {
-            addBronzemanWidget(COLLECTION_VIEW_CATEGORIES_TEXT); // Creates and adds a text widget for the bronzeman
-                                                                 // category.
-            addBronzemanWidget(COLLECTION_VIEW_CATEGORIES_RECTANGLE); // Creates and adds a rectangle widget for the
-                                                                      // bronzeman category.
-            updateContainerScroll();
-        });
+    void initializeCollection() {
+        collectionLog.addCollectionCategory(db);
     }
 
     void killSearchResults() {
@@ -1020,16 +689,15 @@ public class CrabmanModeModePlugin extends Plugin {
 
         Collection<UnlockedItemEntity> unlocked = db.getUnlockedItems().values();
 
-
         final ChatMessageBuilder builder = new ChatMessageBuilder()
-            .append(ChatColorType.HIGHLIGHT)
-            .append("Your group has recently unlocked: ")
-            .append(ChatColorType.NORMAL)
-            .append(unlocked.stream()
-                .sorted(Comparator.comparing(UnlockedItemEntity::getAcquiredOn).reversed())
-                .limit(5)
-                .map(UnlockedItemEntity::getItemName)
-                .collect(Collectors.joining(", ")));
+                .append(ChatColorType.HIGHLIGHT)
+                .append("Your group has recently unlocked: ")
+                .append(ChatColorType.NORMAL)
+                .append(unlocked.stream()
+                        .sorted(Comparator.comparing(UnlockedItemEntity::getAcquiredOn).reversed())
+                        .limit(5)
+                        .map(UnlockedItemEntity::getItemName)
+                        .collect(Collectors.joining(", ")));
 
         String response = builder.build();
 
