@@ -6,7 +6,6 @@ import java.util.Comparator;
 import java.util.stream.Collectors;
 
 import com.google.common.util.concurrent.Runnables;
-import com.google.inject.Inject;
 
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -28,38 +27,37 @@ import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.game.chatbox.ChatboxTextInput;
 
 public class CrabmanModeCategoryView {
-    private static final int SELECTED_OPACITY = 200;
-    final int UNSELECTED_OPACITY = 235;
+    final int COMBAT_ACHIEVEMENT_BUTTON = 20;
+    final int COLLECTION_LOG_GROUP_ID = 621;
+    final int COLLECTION_VIEW = 36;
+    final int COLLECTION_VIEW_SCROLLBAR = 37;
+    final int COLLECTION_VIEW_HEADER = 19;
+
     final int COLLECTION_VIEW_CATEGORIES_CONTAINER = 28;
     final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 33;
     final int COLLECTION_VIEW_CATEGORIES_TEXT = 34;
     final int COLLECTION_VIEW_CATEGORIES_SCROLLBAR = 28;
-    private static final int COLLECTION_LOG_GROUP_ID = 1234; // Replace with actual ID
-    private static final int COLLECTION_VIEW_HEADER = 5678; // Replace with actual ID
-    private static final int COMBAT_ACHIEVEMENT_BUTTON = 91011; // Replace with actual ID
-    private static final int COLLECTION_VIEW = 121314; // Replace with actual ID
-    private static final int COLLECTION_VIEW_SCROLLBAR = 151617; // Replace with actual ID
+
+    final int MENU_INSPECT = 2;
+    final int MENU_DELETE = 3;
+
+    final int SELECTED_OPACITY = 200;
+    final int UNSELECTED_OPACITY = 235;
+
     private static final int X_INCREMENT = 42;
     private static final int Y_INCREMENT = 40;
     private static final int MAX_X = 210;
     private static final int PADDING_BOTTOM = 3;
-    final int MENU_INSPECT = 2;
-    final int MENU_DELETE = 3;
 
-    @Inject
-    private Client client;
+    private final Client client;
 
-    @Inject
-    private ClientThread clientThread;
+    private final ClientThread clientThread;
 
-    @Inject
-    private ItemManager itemManager;
+    private final ItemManager itemManager;
 
-    @Inject
-    private ChatboxPanelManager chatboxPanelManager;
+    private final ChatboxPanelManager chatboxPanelManager;
 
-    @Inject
-    private ChatMessageManager chatMessageManager;
+    private final ChatMessageManager chatMessageManager;
 
     private Collection<Widget> itemEntries;
 
@@ -67,10 +65,20 @@ public class CrabmanModeCategoryView {
 
     private ChatboxTextInput searchInput;
 
-    private CrabmanModeStorageTableRepo db;
+    private final CrabmanModeStorageTableRepo db;
 
-    public void openCollectionLog(Widget widget, CrabmanModeStorageTableRepo db) {
-        this.db = db;
+    public CrabmanModeCategoryView(CrabmanModeStorageTableRepo database, Client client, ClientThread clientThread,
+            ItemManager itemManager,
+            ChatboxPanelManager chatboxPanelManager, ChatMessageManager chatMessageManager) {
+        db = database;
+        this.client = client;
+        this.clientThread = clientThread;
+        this.itemManager = itemManager;
+        this.chatboxPanelManager = chatboxPanelManager;
+        this.chatMessageManager = chatMessageManager;
+    }
+
+    public void openCollectionLog(Widget widget) {
         widget.setOpacity(SELECTED_OPACITY);
 
         clientThread.invokeLater(() -> {
@@ -104,7 +112,7 @@ public class CrabmanModeCategoryView {
     }
 
     private void setHeaderText(Widget[] headerComponents) {
-        headerComponents[0].setText("Group Crabman Unlocks");
+        headerComponents[0].setText("Group Bronzeman Unlocks");
         headerComponents[1].setText("Unlocks: <col=ff0000>" + db.getUnlockedItems().size());
         if (headerComponents.length > 2) {
             headerComponents[2].setText("");
@@ -298,14 +306,19 @@ public class CrabmanModeCategoryView {
                         .build());
     }
 
-    public void addCollectionCategory(CrabmanModeStorageTableRepo db) {
-        this.db = db;
+    public void addCollectionCategory() {
         clientThread.invokeLater(() -> {
-            addWidget(COLLECTION_VIEW_CATEGORIES_TEXT); // Creates and adds a text widget for the crabman
-            // category.
-            addWidget(COLLECTION_VIEW_CATEGORIES_RECTANGLE); // Creates and adds a rectangle widget for the
-            // crabman category.
-            updateContainerScroll();
+            try {
+                // Creates and adds a text widget for the crabman category
+                addWidget(COLLECTION_VIEW_CATEGORIES_TEXT);
+                // Creates and adds a rectangle widget for the crabman category
+                addWidget(COLLECTION_VIEW_CATEGORIES_RECTANGLE);
+                updateContainerScroll();
+            } catch (Exception e) {
+                e.printStackTrace();
+                return false;
+            }
+            return true;
         });
     }
 
@@ -324,8 +337,9 @@ public class CrabmanModeCategoryView {
         }
 
         if (categoryElements[categoryElements.length - 1].getText().contains("Group Bronzeman Unlocks")) {
-            categoryElements[categoryElements.length - 1].setOpacity(UNSELECTED_OPACITY); // Makes sure the button is
-                                                                                          // unselected by default.
+            // categoryElements[categoryElements.length - 1].setOpacity(UNSELECTED_OPACITY);
+            // // Makes sure the button is
+            // unselected by default.
             return; // The Crabman Unlocks category has already been added.
         }
 
@@ -341,11 +355,11 @@ public class CrabmanModeCategoryView {
         Widget crabmanUnlocks = categories.createChild(position, template.getType());
         crabmanUnlocks.setText("Group Bronzeman Unlocks");
         crabmanUnlocks.setName("<col=ff9040>Group Bronzeman Unlocks</col>");
-        crabmanUnlocks.setOpacity(UNSELECTED_OPACITY);
+        // crabmanUnlocks.setOpacity(UNSELECTED_OPACITY);
         if (template.hasListener()) {
             crabmanUnlocks.setHasListener(true);
             crabmanUnlocks.setAction(1, "View");
-            crabmanUnlocks.setOnOpListener((JavaScriptCallback) e -> openCollectionLog(crabmanUnlocks, db));
+            crabmanUnlocks.setOnOpListener((JavaScriptCallback) e -> openCollectionLog(crabmanUnlocks));
         }
         crabmanUnlocks.setBorderType(template.getBorderType());
         crabmanUnlocks.setItemId(template.getItemId());

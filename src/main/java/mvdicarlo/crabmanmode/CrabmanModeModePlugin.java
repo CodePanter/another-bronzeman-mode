@@ -1,5 +1,31 @@
 /*
+ * Original License
  * Copyright (c) 2019, CodePanter <https://github.com/codepanter>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/*
+ * Copyright (c) 2024, mvdicarlo <https://github.com/mvdicarlo>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,7 +82,6 @@ import net.runelite.api.ItemID;
 import net.runelite.api.MessageNode;
 import net.runelite.api.NameableContainer;
 import net.runelite.api.Player;
-import net.runelite.api.ScriptID;
 import net.runelite.api.WorldType;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
@@ -80,6 +105,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PluginChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.WorldService;
+import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -89,7 +115,7 @@ import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 
 @Slf4j
-@PluginDescriptor(name = "Crabman Mode", description = "Modification of bronzeman mode plugin to support group bronzeman. Limits access to buying an item on the Grand Exchange until it is obtained otherwise.", tags = {
+@PluginDescriptor(name = "Group Bronzeman Mode", description = "Modification of bronzeman mode plugin to support group bronzeman. Limits access to buying an item on the Grand Exchange until it is obtained otherwise.", tags = {
         "overlay", "bronzeman", "crabman", "group bronzeman" })
 public class CrabmanModeModePlugin extends Plugin {
     static final String CONFIG_GROUP = "crabmanmode";
@@ -165,6 +191,9 @@ public class CrabmanModeModePlugin extends Plugin {
     @Inject
     private CrabmanModeModeOverlay AnotherBronzemanModeOverlay;
 
+    @Inject
+    private ChatboxPanelManager chatboxPanelManager;
+
     @Getter
     private BufferedImage unlockImage = null;
 
@@ -177,7 +206,7 @@ public class CrabmanModeModePlugin extends Plugin {
 
     private final CrabmanModeStorageTableRepo db = new CrabmanModeStorageTableRepo();
 
-    private final CrabmanModeCategoryView collectionLog = new CrabmanModeCategoryView();
+    private CrabmanModeCategoryView collectionLog;
 
     @Provides
     CrabmanModeModeConfig provideConfig(ConfigManager configManager) {
@@ -191,6 +220,8 @@ public class CrabmanModeModePlugin extends Plugin {
         updateNamesBronzeman();
         updateAllowedCrabman();
         initializeDatabase();
+        collectionLog = new CrabmanModeCategoryView(db, client, clientThread, itemManager, chatboxPanelManager,
+                chatMessageManager);
         loadResources();
         db.addUnlockedItemsListener((items) -> onItemsUnlocked(items));
         overlayManager.add(AnotherBronzemanModeOverlay);
@@ -248,12 +279,12 @@ public class CrabmanModeModePlugin extends Plugin {
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded e) {
-        if (e.getGroupId() != COLLECTION_LOG_GROUP_ID || config.moveCollectionLogUnlocks() || !isLoggedIntoCrabman()) {
+        if (e.getGroupId() != COLLECTION_LOG_GROUP_ID || !isLoggedIntoCrabman()) {
             return;
         }
 
         Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
-        collectionLog.openCollectionLog(collectionViewHeader, db);
+        collectionLog.openCollectionLog(collectionViewHeader);
     }
 
     /** Unlocks all new items that are currently not unlocked **/
@@ -271,7 +302,7 @@ public class CrabmanModeModePlugin extends Plugin {
         }
 
         if ((event.getScriptId() == COLLECTION_LOG_OPEN_OTHER || event.getScriptId() == COLLECTION_LOG_ITEM_CLICK ||
-                event.getScriptId() == COLLECTION_LOG_DRAW_LIST) && config.moveCollectionLogUnlocks()) {
+                event.getScriptId() == COLLECTION_LOG_DRAW_LIST) && isLoggedIntoCrabman()) {
             initializeCollection();
         }
     }
@@ -430,7 +461,7 @@ public class CrabmanModeModePlugin extends Plugin {
     }
 
     void initializeCollection() {
-        collectionLog.addCollectionCategory(db);
+        collectionLog.addCollectionCategory();
     }
 
     void killSearchResults() {
