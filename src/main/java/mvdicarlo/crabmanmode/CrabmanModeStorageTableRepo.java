@@ -1,9 +1,5 @@
 package mvdicarlo.crabmanmode;
 
-import com.azure.data.tables.TableClient;
-import com.azure.data.tables.TableClientBuilder;
-import com.azure.data.tables.models.ListEntitiesOptions;
-
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -15,6 +11,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import com.azure.data.tables.TableClient;
+import com.azure.data.tables.TableClientBuilder;
+import com.azure.data.tables.models.ListEntitiesOptions;
+
 public class CrabmanModeStorageTableRepo {
     private TableClient tableClient;
     private final Map<Integer, UnlockedItemEntity> unlockedItems = new HashMap<>();
@@ -22,31 +22,57 @@ public class CrabmanModeStorageTableRepo {
     private final List<Consumer<List<UnlockedItemEntity>>> listeners = new ArrayList<>();
     private String user;
 
-    public Map<Integer, UnlockedItemEntity> getUnlockedItems()
-    {
+    // Used to flush items added to the list while the username is still missing for
+    // whatever reason
+    private final List<UnlockedItemEntity> unlockedItemQueue = new ArrayList<>();
+
+    public Map<Integer, UnlockedItemEntity> getUnlockedItems() {
         return unlockedItems;
     }
 
-    public void initialize()
-    {
-        if (tableClient != null) {
-            return;
+    public void updateConnection(String connectionString, String tableName) {
+        if (scheduler == null) {
+            scheduler = Executors.newScheduledThreadPool(1);
+            scheduleUnlocksUpdate();
+            scheduleFlushQueue();
         }
-        this.tableClient = new TableClientBuilder()
-                .connectionString(
-                        "stub")
-                .tableName("stub")
+        tableClient = new TableClientBuilder()
+                .connectionString(connectionString)
+                .tableName(tableName)
                 .buildClient();
+        try {
+            tableClient.createTable();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+        unlockedItems.clear();
         unlockedItems.putAll(getAllUnlockedItems());
-
-        // Initialize the scheduler
-        scheduler = Executors.newScheduledThreadPool(1);
-        scheduleUnlocksUpdate();
     }
 
-    public void setUser(String user)
-    {
+    public void close() {
+        user = null;
+        tableClient = null;
+        unlockedItems.clear();
+        if (scheduler != null) {
+            scheduler.shutdown();
+            scheduler = null;
+        }
+    }
+
+    public void setUser(String user) {
         this.user = user;
+    }
+
+    public boolean isInitialized() {
+        return tableClient != null && user != null && !user.isEmpty();
+    }
+
+    private void flushQueue() {
+        if (!isInitialized()) {
+            return;
+        }
+        unlockedItemQueue.forEach(this::insertUnlockedItem);
+        unlockedItemQueue.clear();
     }
 
     private boolean itemExists(String itemId) {
@@ -62,9 +88,14 @@ public class CrabmanModeStorageTableRepo {
     }
 
     public void insertUnlockedItem(UnlockedItemEntity unlockedItem) {
+        if (!isInitialized()) {
+            unlockedItemQueue.add(unlockedItem);
+            return;
+        }
         if (itemExists(unlockedItem.getEntity().getRowKey())) {
             return;
         }
+        unlockedItem.setAcquiredBy(user);
         tableClient.upsertEntity(unlockedItem.getEntity());
         List<UnlockedItemEntity> entities = new ArrayList<>();
         entities.add(unlockedItem);
@@ -86,7 +117,7 @@ public class CrabmanModeStorageTableRepo {
         // Create OData filter
         String filter = "Timestamp gt datetime'" + acquiredOn.toString() + "'";
         ListEntitiesOptions listEntitiesOptions = new ListEntitiesOptions()
-            .setFilter(filter);
+                .setFilter(filter);
         this.tableClient.listEntities(listEntitiesOptions, Duration.ofSeconds(5), null).forEach(entity -> {
             UnlockedItemEntity unlockedItem = new UnlockedItemEntity(entity);
             unlockedItemsMap.put(unlockedItem.getItemId(), unlockedItem);
@@ -96,13 +127,13 @@ public class CrabmanModeStorageTableRepo {
 
     public void updateUnlockedItems() {
         OffsetDateTime acquiredOn = unlockedItems.values().stream()
-            .map(UnlockedItemEntity::getAcquiredOn)
-            .max(OffsetDateTime::compareTo)
-            .orElse(OffsetDateTime.now().minusMinutes(1));
+                .map(UnlockedItemEntity::getAcquiredOn)
+                .max(OffsetDateTime::compareTo)
+                .orElse(OffsetDateTime.now().minusMinutes(1));
         Map<Integer, UnlockedItemEntity> newUnlockedItems = getAllUnlockedAfter(acquiredOn);
         List<UnlockedItemEntity> newItemsUnlockedByOthers = newUnlockedItems.values().stream()
-            .filter(item -> !item.getAcquiredBy().equals(this.user))
-            .toList();
+                .filter(item -> !item.getAcquiredBy().equals(this.user))
+                .toList();
         synchronized (unlockedItems) {
             unlockedItems.putAll(newUnlockedItems);
         }
@@ -112,20 +143,26 @@ public class CrabmanModeStorageTableRepo {
     private void scheduleUnlocksUpdate() {
         scheduler.scheduleAtFixedRate(() -> {
             try {
+                if (tableClient == null || user == null || user.isEmpty()) {
+                    return;
+                }
                 updateUnlockedItems();
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, 0, 1, TimeUnit.MINUTES);
+        }, 0, 5, TimeUnit.MINUTES);
+    }
+
+    public void scheduleFlushQueue() {
+        scheduler.scheduleAtFixedRate(() -> {
+            if (user != null && !user.isEmpty() && !unlockedItemQueue.isEmpty()) {
+                flushQueue();
+            }
+        }, 0, 1, TimeUnit.SECONDS);
     }
 
     public void addUnlockedItemsListener(Consumer<List<UnlockedItemEntity>> listener) {
         listeners.add(listener);
-    }
-
-    public void clear()
-    {
-        unlockedItems.clear();
     }
 
     private void notifyListeners(List<UnlockedItemEntity> newUnlockedItems) {

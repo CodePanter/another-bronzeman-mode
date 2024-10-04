@@ -14,28 +14,36 @@ public class UnlockedItemEntity {
     }
 
     public UnlockedItemEntity(String itemName, Integer itemId, String acquiredBy) {
-        this.entity = new TableEntity(PartitionKey, itemId.toString());
-        this.entity.addProperty("AcquiredBy", acquiredBy);
-        this.entity.addProperty("ItemName", itemName);
+        entity = new TableEntity(PartitionKey, itemId.toString());
+        entity.addProperty("AcquiredBy", acquiredBy);
+        entity.addProperty("ItemName", itemName);
     }
 
     public Integer getItemId() {
-        return Integer.parseInt(this.entity.getProperty("RowKey").toString());
+        return Integer.parseInt(entity.getProperty("RowKey").toString());
     }
 
     public String getAcquiredBy() {
-        return this.entity.getProperty("AcquiredBy").toString();
+        Object acBy = entity.getProperty("AcquiredBy");
+        if (acBy == null) {
+            return "";
+        }
+        return acBy.toString();
+    }
+
+    public void setAcquiredBy(String acquiredBy) {
+        entity.addProperty("AcquiredBy", acquiredBy);
     }
 
     public String getItemName() {
-        return this.entity.getProperty("ItemName").toString();
+        return entity.getProperty("ItemName").toString();
     }
 
     public OffsetDateTime getAcquiredOn() {
-        return this.entity.getTimestamp();
+        return entity.getTimestamp();
     }
 
     public TableEntity getEntity() {
-        return this.entity;
+        return entity;
     }
 }
