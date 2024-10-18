@@ -73,7 +73,6 @@ public class CrabmanModeModeOverlay extends Overlay {
             return null;
         }
         if (itemManager == null) {
-            System.out.println("Item-manager is null");
             return null;
         }
         if (currentUnlock == null) {

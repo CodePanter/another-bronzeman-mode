@@ -1,30 +1,6 @@
 /*
  * Original License
  * Copyright (c) 2019, CodePanter <https://github.com/codepanter>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/*
  * Copyright (c) 2024, mvdicarlo <https://github.com/mvdicarlo>
  * All rights reserved.
  *
@@ -93,7 +69,6 @@ import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatCommandManager;
@@ -114,6 +89,7 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
+import okhttp3.OkHttpClient;
 
 @Slf4j
 @PluginDescriptor(name = "Group Bronzeman Mode", description = "Modification of bronzeman mode plugin to support group bronzeman. Limits access to buying an item on the Grand Exchange until it is obtained otherwise.", tags = {
@@ -163,9 +139,6 @@ public class CrabmanModeModePlugin extends Plugin {
     private Client client;
 
     @Inject
-    private Notifier notifier;
-
-    @Inject
     private ClientThread clientThread;
 
     @Inject
@@ -198,6 +171,9 @@ public class CrabmanModeModePlugin extends Plugin {
     @Inject
     private Gson gson;
 
+    @Inject
+    private OkHttpClient okHttpClient;
+
     @Getter
     private BufferedImage unlockImage = null;
 
@@ -222,6 +198,7 @@ public class CrabmanModeModePlugin extends Plugin {
         super.startUp();
         onSeasonalWorld = false;
         db.setGson(gson);
+        db.setHttpClient(okHttpClient);
         updateNamesBronzeman();
         updateAllowedCrabman();
         initializeDatabase();
@@ -398,6 +375,9 @@ public class CrabmanModeModePlugin extends Plugin {
 
     /** Unlocks all items in the given item container. **/
     public void unlockItemContainerItems(ItemContainer itemContainer) {
+        if (onSeasonalWorld) {
+            return;
+        }
         for (Item i : itemContainer.getItems()) {
             int itemId = i.getId();
             int realItemId = itemManager.canonicalize(itemId);
@@ -421,8 +401,6 @@ public class CrabmanModeModePlugin extends Plugin {
         }
         unlockedItems.forEach((unlockedItem) -> {
             AnotherBronzemanModeOverlay.addItemUnlock(unlockedItem.getItemId());
-            // notifier.notify("You have unlocked a new item: " + unlockedItem.getItemName()
-            // + ".");
             sendChatMessage(unlockedItem.getAcquiredBy() + " has unlocked a new item: " + unlockedItem.getItemName()
                     + ".");
         });

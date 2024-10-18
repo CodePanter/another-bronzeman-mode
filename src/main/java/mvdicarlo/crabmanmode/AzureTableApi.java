@@ -1,10 +1,6 @@
 package mvdicarlo.crabmanmode;
 
 import java.lang.reflect.Type;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -12,13 +8,19 @@ import java.util.stream.Collectors;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public class AzureTableApi {
-    private final HttpClient httpClient;
+    private final OkHttpClient httpClient;
     private final String sasUrl;
     private final Gson gson;
 
-    public AzureTableApi(String sasUrl, Gson gson) {
-        this.httpClient = HttpClient.newHttpClient();
+    public AzureTableApi(String sasUrl, Gson gson, OkHttpClient httpClient) {
+        this.httpClient = httpClient;
         this.sasUrl = sasUrl;
         this.gson = gson;
     }
@@ -33,12 +35,13 @@ public class AzureTableApi {
         return baseUrl + path + "?" + existingParams + (queryParams.isEmpty() ? "" : "&" + queryParams);
     }
 
-    private String sendRequest(HttpRequest request) throws Exception {
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() >= 200 && response.statusCode() < 300) {
-            return response.body();
-        } else {
-            throw new Exception("Request failed: " + response.body());
+    private String sendRequest(Request request) throws Exception {
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                return response.body().string();
+            } else {
+                throw new Exception("Request failed: " + response.body().string());
+            }
         }
     }
 
@@ -59,8 +62,8 @@ public class AzureTableApi {
 
     public UnlockedItemEntity getEntity(String partitionKey, String rowKey) throws Exception {
         String url = buildUrl("(PartitionKey='" + partitionKey + "',RowKey='" + rowKey + "')", "");
-        HttpRequest request = createRequestBuilder(url)
-                .GET()
+        Request request = createRequestBuilder(url)
+                .get()
                 .build();
         String jsonResponse = sendRequest(request);
         UnlockedItemEntity entity = parseJsonResponse(jsonResponse);
@@ -69,8 +72,8 @@ public class AzureTableApi {
 
     public List<UnlockedItemEntity> listEntities(String query) throws Exception {
         String url = buildUrl("", "$filter=" + query);
-        HttpRequest request = createRequestBuilder(url)
-                .GET()
+        Request request = createRequestBuilder(url)
+                .get()
                 .build();
         String jsonResponse = sendRequest(request);
         return parseJsonListResponse(jsonResponse);
@@ -78,8 +81,8 @@ public class AzureTableApi {
 
     public List<UnlockedItemEntity> listEntities() throws Exception {
         String url = buildUrl("", "");
-        HttpRequest request = createRequestBuilder(url)
-                .GET()
+        Request request = createRequestBuilder(url)
+                .get()
                 .build();
         String jsonResponse = sendRequest(request);
         return parseJsonListResponse(jsonResponse);
@@ -87,26 +90,28 @@ public class AzureTableApi {
 
     public void deleteEntity(String partitionKey, String rowKey) throws Exception {
         String url = buildUrl("(PartitionKey='" + partitionKey + "',RowKey='" + rowKey + "')", "");
-        HttpRequest request = createRequestBuilder(url)
-                .DELETE()
+        Request request = createRequestBuilder(url)
+                .delete()
                 .header("If-Match", "*")
                 .build();
-        System.out.println(sendRequest(request));
+        sendRequest(request);
     }
 
     public void insertEntity(UnlockedItemEntity entity) throws Exception {
         String url = buildUrl("", "");
         String jsonPayload = gson.toJson(entity.toMap());
-        HttpRequest request = createRequestBuilder(url)
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+        RequestBody body = RequestBody.create(MediaType.parse("application/json"), jsonPayload);
+        Request request = createRequestBuilder(url)
+                .post(body)
                 .header("Content-Type", "application/json")
                 .build();
-        System.out.println(sendRequest(request));
+        sendRequest(request);
     }
 
-    private HttpRequest.Builder createRequestBuilder(String url) {
-        return HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Accept", "application/json");
+    private Request.Builder createRequestBuilder(String url) {
+        return new Request.Builder()
+                .url(url)
+                .header("Accept", "application/json")
+                .header("User-Agent", "CrabManModePlugin");
     }
 }

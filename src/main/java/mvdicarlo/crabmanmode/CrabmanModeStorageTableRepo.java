@@ -13,6 +13,10 @@ import java.util.stream.Collectors;
 
 import com.google.gson.Gson;
 
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
+
+@Slf4j
 public class CrabmanModeStorageTableRepo {
     private AzureTableApi api;
     private final Map<Integer, UnlockedItemEntity> unlockedItems = new HashMap<>();
@@ -21,6 +25,7 @@ public class CrabmanModeStorageTableRepo {
     private String user;
 
     private Gson gson;
+    private OkHttpClient httpClient;
 
     // Used to flush items added to the list while the username is still missing for
     // whatever reason
@@ -36,7 +41,7 @@ public class CrabmanModeStorageTableRepo {
             scheduleUnlocksUpdate();
             scheduleFlushQueue();
         }
-        api = new AzureTableApi(sasUrl, gson);
+        api = new AzureTableApi(sasUrl, gson, httpClient);
         unlockedItems.clear();
         unlockedItems.putAll(getAllUnlockedItems());
     }
@@ -53,6 +58,10 @@ public class CrabmanModeStorageTableRepo {
 
     public void setGson(Gson gson) {
         this.gson = gson;
+    }
+
+    public void setHttpClient(OkHttpClient httpClient) {
+        this.httpClient = httpClient;
     }
 
     public void setUser(String user) {
@@ -99,14 +108,14 @@ public class CrabmanModeStorageTableRepo {
     }
 
     public void insertUnlockedItem(UnlockedItemEntity unlockedItem) throws Exception {
-        System.out.println("Attempting to insert unlocked item: " + unlockedItem.getItemName());
+        log.debug("Attempting to insert unlocked item: " + unlockedItem.getItemName());
         if (!isInitialized()) {
-            System.out.println("Not initialized, adding to queue");
+            log.debug("Not initialized, adding to queue");
             unlockedItemQueue.add(unlockedItem);
             return;
         }
         if (itemExists(unlockedItem.getItemId())) {
-            System.out.println("Item already exists, skipping");
+            log.debug("Item already exists, skipping");
             return;
         }
         unlockedItem.setAcquiredBy(user);
