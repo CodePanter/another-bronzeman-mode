@@ -37,7 +37,10 @@ To use the Group Bronzeman Mode RuneLite Plugin, you need to set up an Azure Sto
       - Set an expiration time far in the future to avoid frequent renewals.
    6. Click **Generate** and copy the generated SAS URL. You will need this to configure the plugin.
 
-3. **Configure the Plugin**:
+![Navigate to storage table](./guide-images/navigate.png)
+![!Generate SAS](./guide-images/sas-settings.png)
+
+1. **Configure the Plugin**:
    - Open the RuneLite client and go to the plugin configuration for Group Bronzeman Mode.
    - Enter the SAS Url you copied earlier into the appropriate field.
 
