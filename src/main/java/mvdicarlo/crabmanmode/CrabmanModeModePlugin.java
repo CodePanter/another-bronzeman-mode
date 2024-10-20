@@ -229,6 +229,7 @@ public class CrabmanModeModePlugin extends Plugin {
         overlayManager.remove(AnotherBronzemanModeOverlay);
         chatCommandManager.unregisterCommand(GBM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(GBM_COUNT_STRING);
+        chatCommandManager.unregisterCommand(GBM_RECENT_STRING);
 
         clientThread.invoke(() -> {
             // Cleanup is not required after having played on a seasonal world.
