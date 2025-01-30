@@ -109,7 +109,6 @@ public class AnotherBronzemanModeOverlay extends Overlay
         }
         if (itemManager == null)
         {
-            System.out.println("Item-manager is null");
             return null;
         }
         if (currentUnlock == null)
