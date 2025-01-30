@@ -90,16 +90,14 @@ public class AnotherBronzemanModePlugin extends Plugin
     private static final String BM_RESET_STRING = "!bmreset";
     private static final String BM_BACKUP_STRING = "!bmbackup";
 
-    final int COMBAT_ACHIEVEMENT_BUTTON = 20;
     final int COLLECTION_LOG_GROUP_ID = 621;
-    final int COLLECTION_VIEW = 36;
-    final int COLLECTION_VIEW_SCROLLBAR = 37;
-    final int COLLECTION_VIEW_HEADER = 19;
+    final int COMBAT_ACHIEVEMENT_BUTTON = 40697877;
+    final int COLLECTION_VIEW_SCROLLBAR = 40697894;
 
-    final int COLLECTION_VIEW_CATEGORIES_CONTAINER = 28;
-    final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 33;
-    final int COLLECTION_VIEW_CATEGORIES_TEXT = 34;
-    final int COLLECTION_VIEW_CATEGORIES_SCROLLBAR = 28;
+    final int COLLECTION_VIEW_CATEGORIES_CONTAINER = 40697885;
+    final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 40697890;
+    final int COLLECTION_VIEW_CATEGORIES_TEXT = 40697891;
+    final int COLLECTION_VIEW_CATEGORIES_SCROLLBAR = 40697886;
 
     final int MENU_INSPECT = 2;
     final int MENU_DELETE = 3;
@@ -107,11 +105,10 @@ public class AnotherBronzemanModePlugin extends Plugin
     final int SELECTED_OPACITY = 200;
     final int UNSELECTED_OPACITY = 235;
 
-    private static final int GE_SEARCH_RESULTS = 50;
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
 
     private static final int COLLECTION_LOG_OPEN_OTHER = 2728;
-    private static final int COLLECTION_LOG_DRAW_LIST = 2730;
+    private static final int COLLECTION_LOG_DRAW_LIST = 2731;
     private static final int COLLECTION_LOG_ITEM_CLICK = 2733;
 
     static final Set<Integer> OWNED_INVENTORY_IDS = ImmutableSet.of(
@@ -280,7 +277,7 @@ public class AnotherBronzemanModePlugin extends Plugin
             return;
         }
 
-        Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
+        Widget collectionViewHeader = client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_HEADER);
         openBronzemanCategory(collectionViewHeader);
     }
 
@@ -389,8 +386,8 @@ public class AnotherBronzemanModePlugin extends Plugin
 
         itemEntries = null;
         clientThread.invokeLater(() -> {
-            Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
-            Widget combatAchievementsButton = client.getWidget(COLLECTION_LOG_GROUP_ID, COMBAT_ACHIEVEMENT_BUTTON);
+            Widget collectionViewHeader = client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_HEADER);
+            Widget combatAchievementsButton = client.getWidget(COMBAT_ACHIEVEMENT_BUTTON);
             combatAchievementsButton.setHidden(true);
             Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
             headerComponents[0].setText("Bronzeman Unlocks");
@@ -400,8 +397,8 @@ public class AnotherBronzemanModePlugin extends Plugin
             }
             createSearchButton(collectionViewHeader);
 
-            Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
-            Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
+            Widget collectionView = client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_ITEMS);
+            Widget scrollbar = client.getWidget(COLLECTION_VIEW_SCROLLBAR);
             collectionView.deleteAllChildren();
 
             int index = 0;
@@ -472,7 +469,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     private void updateFilter(String input)
     {
-        final Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
+        final Widget collectionView = client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_ITEMS);
 
         if (collectionView == null)
         {
@@ -525,7 +522,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         collectionView.setScrollHeight(y);
         collectionView.revalidateScroll();
 
-        Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
+        Widget scrollbar = client.getWidget(COLLECTION_VIEW_SCROLLBAR);
         client.runScript(
                 ScriptID.UPDATE_SCROLLBAR,
                 scrollbar.getId(),
@@ -694,7 +691,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     void addBronzemanWidget(int widgetId) {
-        Widget logCategories = client.getWidget(COLLECTION_LOG_GROUP_ID, widgetId);
+        Widget logCategories = client.getWidget(widgetId);
         Widget[] categoryElements = logCategories.getDynamicChildren();
         if (categoryElements.length == 0) {
             return; // The category elements have not been loaded yet.
@@ -720,8 +717,8 @@ public class AnotherBronzemanModePlugin extends Plugin
     }
 
     void updateContainerScroll() {
-        Widget categoryContainer = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_CONTAINER);
-        Widget logCategories = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_RECTANGLE);
+        Widget categoryContainer = client.getWidget(COLLECTION_VIEW_CATEGORIES_CONTAINER);
+        Widget logCategories = client.getWidget(COLLECTION_VIEW_CATEGORIES_RECTANGLE);
         Widget[] categoryElements = logCategories.getDynamicChildren();
         int originalHeight = 315; // 21 elements * 15 height
         int scrollHeight = categoryElements.length * 18;
@@ -738,7 +735,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         categoryContainer.revalidate();
         categoryContainer.revalidateScroll();
 
-        Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_CATEGORIES_SCROLLBAR);
+        Widget scrollbar = client.getWidget(COLLECTION_VIEW_CATEGORIES_SCROLLBAR);
 
         client.runScript(
                 ScriptID.UPDATE_SCROLLBAR,
@@ -759,7 +756,7 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     void killSearchResults()
     {
-        Widget grandExchangeSearchResults = client.getWidget(162, GE_SEARCH_RESULTS);
+        Widget grandExchangeSearchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
 
         if (grandExchangeSearchResults == null)
         {
