@@ -63,21 +63,10 @@ public interface AnotherBronzemanModeConfig extends Config
     }
 
     @ConfigItem(
-        keyName = "moveCollectionLogUnlocks",
-        name = "Move collection log unlocks",
-        description = "Moves the bronzeman mode unlocks to the bottom of the 'Other' tab.",
-        position = 6
-    )
-    default boolean moveCollectionLogUnlocks()
-    {
-        return false;
-    }
-
-    @ConfigItem(
         keyName = "allowTrading",
         name = "Allow trading as a bronzeman",
         description = "Allows the player to trade even though they are a bronzeman.",
-        position = 7
+        position = 6
     )
     default boolean allowTrading()
     {
@@ -88,7 +77,7 @@ public interface AnotherBronzemanModeConfig extends Config
         keyName = "resetCommand",
         name = "Enable reset command",
         description = "Enables the !bmreset command used for wiping your unlocked items.",
-        position = 8
+        position = 7
     )
     default boolean resetCommand()
     {
@@ -97,9 +86,9 @@ public interface AnotherBronzemanModeConfig extends Config
 
     @ConfigItem(
     	keyName = "hideUntradeables",
-		name = "Hide Untradeable Items",
-		description = "Hides untradeable items in the collection log and in chat/notifications",
-		position = 9
+		name = "Hide untradeable item unlocks",
+		description = "Prevents unlock popups for untradeable items and in chat/notifications",
+		position = 8
 	)
 	default boolean hideUntradeables() {
     	return false;

@@ -133,7 +133,7 @@ public class AnotherBronzemanModeOverlay extends Overlay
             {
                 int itemID = currentUnlock;
                 ItemComposition itemComposition = itemManager.getItemComposition(itemID);
-                String itemName = itemComposition.getName();
+                String itemName = itemComposition.getMembersName();
                 String fileName = "ItemUnlocked " + itemName + " ";
                 takeScreenshot(fileName);
             }
