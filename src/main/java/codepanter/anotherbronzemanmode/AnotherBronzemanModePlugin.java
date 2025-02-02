@@ -62,6 +62,7 @@ import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.ClientToolbar;
 
 import javax.inject.Inject;
+import javax.swing.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
@@ -92,6 +93,8 @@ public class AnotherBronzemanModePlugin extends Plugin
     private static final String BM_BACKUP_STRING = "!bmbackup";
 
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
+
+    private boolean LOGGING_IN = false;
 
     static final Set<Integer> OWNED_INVENTORY_IDS = ImmutableSet.of(
             0,    // Reward from fishing trawler.
@@ -161,7 +164,6 @@ public class AnotherBronzemanModePlugin extends Plugin
     private List<String> namesBronzeman = new ArrayList<>();
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
     private boolean onSeasonalWorld;
-    private boolean deleteConfirmed = false;
     private File legacyFile;
     private File legacyFolder;
     private File profileFile;
@@ -251,8 +253,12 @@ public class AnotherBronzemanModePlugin extends Plugin
     @Subscribe
     public void onGameStateChanged(GameStateChanged e)
     {
-        if (e.getGameState() == GameState.LOGGED_IN)
+        if (e.getGameState() == GameState.LOGGING_IN) {
+            LOGGING_IN = true; // Set when logging in
+        }
+        if (e.getGameState() == GameState.LOGGED_IN && LOGGING_IN)
         {
+            LOGGING_IN = false; // Makes sure this only happens when having just logged in; not when the state changed from 'LOADING'.
             setupUnlockHistory();
             loadPlayerUnlocks();
             loadResources();
@@ -369,20 +375,48 @@ public class AnotherBronzemanModePlugin extends Plugin
         }
     }
 
-    public void unlockFilter(boolean showUntradeableItems)
+    public void unlockFilter(boolean showUntradeableItems, SortOption sortOption, String search)
     {
         List<ItemObject> filteredItems = new ArrayList<ItemObject>();
 
         for (Integer itemID : unlockedItems) {
-            ItemComposition composition = itemManager.getItemComposition(itemID);
+            ItemComposition composition = client.getItemDefinition(itemID);
 
             boolean tradeable = composition.isTradeable();
             if (!showUntradeableItems && !tradeable) continue;
 
+            String itemName = composition.getMembersName();
+            if (!search.isEmpty() && !itemName.toLowerCase().contains(search)) continue;
+
             AsyncBufferedImage icon = itemManager.getImage(itemID);
 
-            ItemObject item = new ItemObject(itemID, composition.getName(), tradeable, icon);
+            ItemObject item = new ItemObject(itemID, itemName, tradeable, icon);
             filteredItems.add(item);
+        }
+
+        if (sortOption.name() == "NEW_TO_OLD")
+        {
+            Collections.reverse(filteredItems);
+        }
+
+        if (sortOption.name() == "ALPHABETICAL_ASC")
+        {
+            Collections.sort(filteredItems,new Comparator<ItemObject>() {
+                @Override
+                public int compare(ItemObject i1, ItemObject i2) {
+                    return i1.getName().compareToIgnoreCase(i2.getName());
+                }
+            });
+        }
+
+        if (sortOption.name() == "ALPHABETICAL_DESC")
+        {
+            Collections.sort(filteredItems,new Comparator<ItemObject>() {
+                @Override
+                public int compare(ItemObject i1, ItemObject i2) {
+                    return i2.getName().compareToIgnoreCase(i1.getName());
+                }
+            });
         }
 
         panel.displayItems(filteredItems); // Redraw the panel
@@ -443,7 +477,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         queueItemUnlock(ItemID.OLD_SCHOOL_BOND);
     }
 
-    private void sendChatMessage(String chatMessage)
+    public void sendChatMessage(String chatMessage)
     {
         final String message = new ChatMessageBuilder()
             .append(ChatColorType.HIGHLIGHT)
@@ -455,6 +489,14 @@ public class AnotherBronzemanModePlugin extends Plugin
                 .type(ChatMessageType.CONSOLE)
                 .runeLiteFormattedMessage(message)
                 .build());
+    }
+
+    public boolean isDeletionConfirmed(final String message, final String title)
+    {
+        int confirm = JOptionPane.showConfirmDialog(panel,
+                message, title, JOptionPane.OK_CANCEL_OPTION);
+
+        return confirm == JOptionPane.YES_OPTION;
     }
 
     void killSearchResults()
