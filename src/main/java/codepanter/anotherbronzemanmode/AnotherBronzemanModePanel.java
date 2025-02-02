@@ -148,7 +148,7 @@ public class AnotherBronzemanModePanel extends PluginPanel
                     popupMenu.setBorder(itemBorder);
                     itemPanel.setComponentPopupMenu(popupMenu);
 
-                    final JMenuItem inspectButton = new JMenuItem("Inspect");
+                    final JMenuItem inspectButton = new JMenuItem("Inspect " + item.getName());
                     inspectButton.addActionListener(e ->
                     {
                         final ChatMessageBuilder examination = new ChatMessageBuilder()
@@ -162,7 +162,7 @@ public class AnotherBronzemanModePanel extends PluginPanel
                     });
                     popupMenu.add(inspectButton);
 
-                    final JMenuItem deleteButton = new JMenuItem("Delete");
+                    final JMenuItem deleteButton = new JMenuItem("Remove " + item.getName());
                     deleteButton.addActionListener(e ->
                     {
                         if (plugin.isDeletionConfirmed("Do you want to re-lock: " + item.getName(), "Warning"))

@@ -200,7 +200,7 @@ public class AnotherBronzemanModePlugin extends Plugin
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/bronzeman_icon.png");
 
         navButton = NavigationButton.builder()
-                .tooltip("Bronzeman unlocks")
+                .tooltip("Another Bronzeman Mode")
                 .icon(icon)
                 .panel(panel)
                 .priority(6)
