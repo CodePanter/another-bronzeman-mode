@@ -26,9 +26,19 @@ dependencies {
 }
 
 group = 'codepanter.anotherbronzemanmode'
-version = '1.1-SNAPSHOT'
+version = '1.2'
 sourceCompatibility = '1.8'
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
+}
+
+task createProperties(dependsOn: processResources) {
+    doLast {
+        new File("$buildDir/resources/main/anotherbronzemanmode_version.txt").text = "version=$project.version"
+    }
+}
+
+classes {
+    dependsOn createProperties
 }

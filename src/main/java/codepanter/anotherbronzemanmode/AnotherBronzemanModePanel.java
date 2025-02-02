@@ -90,8 +90,9 @@ public class AnotherBronzemanModePanel extends PluginPanel
         filterButton.addActionListener((actionEvent) ->
         {
             clientThread.invokeLater(() -> plugin.unlockFilter(showUntradeableItems.isSelected(), (SortOption) sortDropDown.getSelectedItem(), searchBar.getText()));
+            plugin.setSavedVersionString(plugin.getCurrentVersionString());
         });
-        filterButton.setText("View Items");
+        filterButton.setText("View Unlocked Items");
         filterButton.setFocusable(false);
         selectionPanel.add(filterButton);
 
