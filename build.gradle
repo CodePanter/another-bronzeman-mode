@@ -35,7 +35,8 @@ tasks.withType(JavaCompile) {
 
 task createProperties(dependsOn: processResources) {
     doLast {
-        layout.buildDirectory.file("resources/main/anotherbronzemanmode_version.txt").get().asFile.text = "version=$project.version"
+        def bronzeFile = layout.buildDirectory.file("resources/main/anotherbronzemanmode_version.txt").get().asFile
+        bronzeFile.text = "version=$project.version"
     }
 }
 
