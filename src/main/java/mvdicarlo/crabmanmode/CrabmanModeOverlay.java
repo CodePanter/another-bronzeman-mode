@@ -39,10 +39,10 @@ import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayPosition;
 
 @Slf4j
-public class CrabmanModeModeOverlay extends Overlay {
+public class CrabmanModeOverlay extends Overlay {
 
     private final Client client;
-    private final CrabmanModeModePlugin plugin;
+    private final CrabmanModePlugin plugin;
 
     private Integer currentUnlock;
     private long displayTime;
@@ -54,7 +54,7 @@ public class CrabmanModeModeOverlay extends Overlay {
     private ItemManager itemManager;
 
     @Inject
-    public CrabmanModeModeOverlay(Client client, CrabmanModeModePlugin plugin) {
+    public CrabmanModeOverlay(Client client, CrabmanModePlugin plugin) {
         super(plugin);
         this.client = client;
         this.plugin = plugin;

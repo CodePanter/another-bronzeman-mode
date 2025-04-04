@@ -4,8 +4,8 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
-@ConfigGroup(CrabmanModeModePlugin.CONFIG_GROUP)
-public interface CrabmanModeModeConfig extends Config {
+@ConfigGroup(CrabmanModePlugin.CONFIG_GROUP)
+public interface CrabmanModeConfig extends Config {
     @ConfigItem(keyName = "namesBronzeman", name = "Bronzeman Names", position = 1, description = "Configures names of bronzemen to highlight in chat. Format: (name), (name)")
     default String namesBronzeman() {
         return "";

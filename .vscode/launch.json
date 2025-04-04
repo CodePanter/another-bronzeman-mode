@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Run OSRS Crabman Mode Plugin",
+            "request": "launch",
+            "mainClass": "mvdicarlo.crabmanmode.CrabmanModeModePluginTest",
+            "projectName": "crabman-mode"
+        },
+        {
+            "type": "gradle",
+            "name": "Run with Gradle Task",
+            "request": "launch",
+            "tasks": ["runPlugin"],
+            "projectPath": "${workspaceFolder}"
+        }
+    ]
+}

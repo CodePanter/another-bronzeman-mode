@@ -30,12 +30,14 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.inject.Inject;
+import javax.swing.JOptionPane;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
@@ -84,7 +86,10 @@ import net.runelite.client.game.WorldService;
 import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.worlds.World;
@@ -94,22 +99,20 @@ import okhttp3.OkHttpClient;
 @Slf4j
 @PluginDescriptor(name = "Group Bronzeman Mode", description = "Modification of bronzeman mode plugin to support group bronzeman. Limits access to buying an item on the Grand Exchange until it is obtained otherwise.", tags = {
         "overlay", "bronzeman", "crabman", "group bronzeman" })
-public class CrabmanModeModePlugin extends Plugin {
+public class CrabmanModePlugin extends Plugin {
     static final String CONFIG_GROUP = "crabmanmode";
     private static final String GBM_UNLOCKS_STRING = "!gbmunlocks";
     private static final String GBM_COUNT_STRING = "!gbmcount";
     private static final String GBM_RECENT_STRING = "!gbmrecent";
 
-    final int COMBAT_ACHIEVEMENT_BUTTON = 20;
     final int COLLECTION_LOG_GROUP_ID = 621;
-    final int COLLECTION_VIEW = 36;
-    final int COLLECTION_VIEW_SCROLLBAR = 37;
-    final int COLLECTION_VIEW_HEADER = 19;
+    final int COMBAT_ACHIEVEMENT_BUTTON = 40697877;
+    final int COLLECTION_VIEW_SCROLLBAR = 40697894;
 
-    final int COLLECTION_VIEW_CATEGORIES_CONTAINER = 28;
-    final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 33;
-    final int COLLECTION_VIEW_CATEGORIES_TEXT = 34;
-    final int COLLECTION_VIEW_CATEGORIES_SCROLLBAR = 28;
+    final int COLLECTION_VIEW_CATEGORIES_CONTAINER = 40697885;
+    final int COLLECTION_VIEW_CATEGORIES_RECTANGLE = 40697890;
+    final int COLLECTION_VIEW_CATEGORIES_TEXT = 40697891;
+    final int COLLECTION_VIEW_CATEGORIES_SCROLLBAR = 40697886;
 
     final int MENU_INSPECT = 2;
     final int MENU_DELETE = 3;
@@ -121,7 +124,7 @@ public class CrabmanModeModePlugin extends Plugin {
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
 
     private static final int COLLECTION_LOG_OPEN_OTHER = 2728;
-    private static final int COLLECTION_LOG_DRAW_LIST = 2730;
+    private static final int COLLECTION_LOG_DRAW_LIST = 2731;
     private static final int COLLECTION_LOG_ITEM_CLICK = 2733;
 
     static final Set<Integer> OWNED_INVENTORY_IDS = ImmutableSet.of(
@@ -160,10 +163,10 @@ public class CrabmanModeModePlugin extends Plugin {
     private ChatCommandManager chatCommandManager;
 
     @Inject
-    private CrabmanModeModeConfig config;
+    private CrabmanModeConfig config;
 
     @Inject
-    private CrabmanModeModeOverlay AnotherBronzemanModeOverlay;
+    private CrabmanModeOverlay CrabmanModeOverlay;
 
     @Inject
     private ChatboxPanelManager chatboxPanelManager;
@@ -177,6 +180,11 @@ public class CrabmanModeModePlugin extends Plugin {
     @Getter
     private BufferedImage unlockImage = null;
 
+    @Inject
+    private ClientToolbar clientToolbar;
+
+    private NavigationButton navButton;
+
     private static final String SCRIPT_EVENT_SET_CHATBOX_INPUT = "setChatboxInput";
 
     private List<String> namesBronzeman = new ArrayList<>();
@@ -186,11 +194,12 @@ public class CrabmanModeModePlugin extends Plugin {
 
     private final CrabmanModeStorageTableRepo db = new CrabmanModeStorageTableRepo();
 
-    private CrabmanModeCategoryView collectionLog;
+    private CrabmanModePanel panel;
+
 
     @Provides
-    CrabmanModeModeConfig provideConfig(ConfigManager configManager) {
-        return configManager.getConfig(CrabmanModeModeConfig.class);
+    CrabmanModeConfig provideConfig(ConfigManager configManager) {
+        return configManager.getConfig(CrabmanModeConfig.class);
     }
 
     @Override
@@ -202,11 +211,22 @@ public class CrabmanModeModePlugin extends Plugin {
         updateNamesBronzeman();
         updateAllowedCrabman();
         initializeDatabase();
-        collectionLog = new CrabmanModeCategoryView(db, client, clientThread, itemManager, chatboxPanelManager,
-                chatMessageManager);
+
+        panel = injector.getInstance(CrabmanModePanel.class);
+        final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/bronzeman_icon.png");
+
+        navButton = NavigationButton.builder()
+                .tooltip("Group Bronzeman unlocks")
+                .icon(icon)
+                .panel(panel)
+                .priority(6)
+                .build();
+
+        clientToolbar.addNavigation(navButton);
+
         loadResources();
         db.addUnlockedItemsListener((items) -> onItemsUnlocked(items));
-        overlayManager.add(AnotherBronzemanModeOverlay);
+        overlayManager.add(CrabmanModeOverlay);
         chatCommandManager.registerCommand(GBM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(GBM_COUNT_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(GBM_RECENT_STRING, this::OnRecentUnlocksCommand);
@@ -226,11 +246,11 @@ public class CrabmanModeModePlugin extends Plugin {
     protected void shutDown() throws Exception {
         super.shutDown();
         db.close();
-        overlayManager.remove(AnotherBronzemanModeOverlay);
+        overlayManager.remove(CrabmanModeOverlay);
         chatCommandManager.unregisterCommand(GBM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(GBM_COUNT_STRING);
         chatCommandManager.unregisterCommand(GBM_RECENT_STRING);
-
+        clientToolbar.removeNavigation(navButton);
         clientThread.invoke(() -> {
             // Cleanup is not required after having played on a seasonal world.
             if (client.getGameState() == GameState.LOGGED_IN && !onSeasonalWorld) {
@@ -260,16 +280,6 @@ public class CrabmanModeModePlugin extends Plugin {
         }
     }
 
-    @Subscribe
-    public void onWidgetLoaded(WidgetLoaded e) {
-        if (e.getGroupId() != COLLECTION_LOG_GROUP_ID || !isLoggedIntoCrabman()) {
-            return;
-        }
-
-        Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
-        collectionLog.openCollectionLog(collectionViewHeader);
-    }
-
     /** Unlocks all new items that are currently not unlocked **/
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged e) {
@@ -282,11 +292,6 @@ public class CrabmanModeModePlugin extends Plugin {
     public void onScriptPostFired(ScriptPostFired event) {
         if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT) {
             killSearchResults();
-        }
-
-        if ((event.getScriptId() == COLLECTION_LOG_OPEN_OTHER || event.getScriptId() == COLLECTION_LOG_ITEM_CLICK ||
-                event.getScriptId() == COLLECTION_LOG_DRAW_LIST) && isLoggedIntoCrabman()) {
-            initializeCollection();
         }
     }
 
@@ -374,6 +379,53 @@ public class CrabmanModeModePlugin extends Plugin {
         return playerName.equals(enabledCrabman);
     }
 
+        public void unlockFilter(boolean showUntradeableItems, SortOption sortOption, String search)
+    {
+        List<ItemObject> filteredItems = new ArrayList<ItemObject>();
+
+        for (UnlockedItemEntity unlockedItem : this.db.getUnlockedItems().values()) {
+            ItemComposition composition = client.getItemDefinition(unlockedItem.getItemId());
+
+            boolean tradeable = composition.isTradeable();
+            if (!showUntradeableItems && !tradeable) continue;
+
+            String itemName = composition.getMembersName();
+            if (!search.isEmpty() && !itemName.toLowerCase().contains(search)) continue;
+
+            AsyncBufferedImage icon = itemManager.getImage(unlockedItem.getItemId());
+
+            ItemObject item = new ItemObject(unlockedItem.getItemId(), unlockedItem.getItemName(), tradeable, unlockedItem.getAcquiredOn(), icon);
+            filteredItems.add(item);
+        }
+
+        if (sortOption.name() == "NEW_TO_OLD")
+        {
+            Collections.reverse(filteredItems);
+        }
+
+        if (sortOption.name() == "ALPHABETICAL_ASC")
+        {
+            Collections.sort(filteredItems,new Comparator<ItemObject>() {
+                @Override
+                public int compare(ItemObject i1, ItemObject i2) {
+                    return i1.getName().compareToIgnoreCase(i2.getName());
+                }
+            });
+        }
+
+        if (sortOption.name() == "ALPHABETICAL_DESC")
+        {
+            Collections.sort(filteredItems,new Comparator<ItemObject>() {
+                @Override
+                public int compare(ItemObject i1, ItemObject i2) {
+                    return i2.getName().compareToIgnoreCase(i1.getName());
+                }
+            });
+        }
+
+        panel.displayItems(filteredItems); // Redraw the panel
+    }
+
     /** Unlocks all items in the given item container. **/
     public void unlockItemContainerItems(ItemContainer itemContainer) {
         if (onSeasonalWorld) {
@@ -401,7 +453,7 @@ public class CrabmanModeModePlugin extends Plugin {
             return;
         }
         unlockedItems.forEach((unlockedItem) -> {
-            AnotherBronzemanModeOverlay.addItemUnlock(unlockedItem.getItemId());
+            CrabmanModeOverlay.addItemUnlock(unlockedItem.getItemId());
             sendChatMessage(unlockedItem.getAcquiredBy() + " has unlocked a new item: " + unlockedItem.getItemName()
                     + ".");
         });
@@ -424,6 +476,7 @@ public class CrabmanModeModePlugin extends Plugin {
         log.info("Unlocking item: " + unlockedItem.getItemName());
         try {
             db.insertUnlockedItem(unlockedItem);
+            panel.displayItems(new ArrayList<ItemObject>());
         } catch (Exception e) {
             sendChatMessage("Failed to unlock item: " + unlockedItem.getItemName() + ". Check your SAS Token.");
         }
@@ -435,7 +488,7 @@ public class CrabmanModeModePlugin extends Plugin {
         queueItemUnlock(ItemID.OLD_SCHOOL_BOND, true);
     }
 
-    private void sendChatMessage(String chatMessage) {
+    public void sendChatMessage(String chatMessage) {
         final String message = new ChatMessageBuilder()
                 .append(ChatColorType.HIGHLIGHT)
                 .append(chatMessage)
@@ -448,12 +501,8 @@ public class CrabmanModeModePlugin extends Plugin {
                         .build());
     }
 
-    void initializeCollection() {
-        collectionLog.addCollectionCategory();
-    }
-
     void killSearchResults() {
-        Widget grandExchangeSearchResults = client.getWidget(162, GE_SEARCH_RESULTS);
+        Widget grandExchangeSearchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
 
         if (grandExchangeSearchResults == null) {
             return;
@@ -472,6 +521,8 @@ public class CrabmanModeModePlugin extends Plugin {
                 children[i + 2].setOpacity(70);
             }
         }
+
+        panel.displayItems(new ArrayList<ItemObject>()); // Redraw the panel
     }
 
     private void updateNamesBronzeman() {
@@ -493,6 +544,9 @@ public class CrabmanModeModePlugin extends Plugin {
         }
         log.info("Initializing connection");
         db.updateConnection(config.databaseString());
+        if (panel != null) {
+            panel.displayItems(new ArrayList<ItemObject>());
+        }
     }
 
     /**
@@ -742,4 +796,25 @@ public class CrabmanModeModePlugin extends Plugin {
 
         client.setModIcons(newModIcons);
     }
+
+    public boolean isDeletionConfirmed(final String message, final String title)
+    {
+        int confirm = JOptionPane.showConfirmDialog(panel,
+                message, title, JOptionPane.OK_CANCEL_OPTION);
+
+        return confirm == JOptionPane.YES_OPTION;
+    }
+
+	public void queueItemDelete(int id) {
+        if (!isLoggedIntoCrabman()) {
+            return;
+        }
+        UnlockedItemEntity unlockedItem = db.getUnlockedItems().get(id);
+        if (unlockedItem != null) {
+            db.deleteUnlockedItem(id);
+            sendChatMessage(unlockedItem.getAcquiredBy() + " has re-locked item: " + unlockedItem.getItemName() + ".");
+        } else {
+            sendChatMessage("Failed to delete item: " + id + ". Item not found.");
+        }
+	}
 }
