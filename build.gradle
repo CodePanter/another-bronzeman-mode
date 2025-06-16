@@ -28,7 +28,7 @@ dependencies {
 }
 
 group = 'mvdicarlo'
-version = '1.0.0'
+version = '1.0.1'
 
 application {
     mainClass = 'mvdicarlo.crabmanmode.CrabmanModePluginTest'

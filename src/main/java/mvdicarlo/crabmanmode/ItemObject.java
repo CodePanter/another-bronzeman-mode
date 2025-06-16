@@ -4,14 +4,13 @@ import lombok.Value;
 import java.time.OffsetDateTime;
 import net.runelite.client.util.AsyncBufferedImage;
 
-public class ItemObject
-{
+public class ItemObject {
     int id;
     String name;
     boolean tradeable;
     OffsetDateTime acquiredOn;
     AsyncBufferedImage icon;
-    
+
     public ItemObject(int id, String name, boolean tradeable, OffsetDateTime acquiredOn, AsyncBufferedImage icon) {
         this.id = id;
         this.name = name;

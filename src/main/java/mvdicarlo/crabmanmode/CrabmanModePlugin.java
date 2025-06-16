@@ -33,6 +33,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -45,6 +46,7 @@ import com.google.inject.Provides;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import mvdicarlo.crabmanmode.database.DatabaseRepository;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.ChatPlayer;
 import net.runelite.api.Client;
@@ -68,7 +70,6 @@ import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.PlayerChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.ScriptPostFired;
-import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
@@ -120,12 +121,7 @@ public class CrabmanModePlugin extends Plugin {
     final int SELECTED_OPACITY = 200;
     final int UNSELECTED_OPACITY = 235;
 
-    private static final int GE_SEARCH_RESULTS = 50;
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
-
-    private static final int COLLECTION_LOG_OPEN_OTHER = 2728;
-    private static final int COLLECTION_LOG_DRAW_LIST = 2731;
-    private static final int COLLECTION_LOG_ITEM_CLICK = 2733;
 
     static final Set<Integer> OWNED_INVENTORY_IDS = ImmutableSet.of(
             0, // Reward from fishing trawler.
@@ -186,16 +182,14 @@ public class CrabmanModePlugin extends Plugin {
     private NavigationButton navButton;
 
     private static final String SCRIPT_EVENT_SET_CHATBOX_INPUT = "setChatboxInput";
-
     private List<String> namesBronzeman = new ArrayList<>();
     private String enabledCrabman = "";
     private int bronzemanIconOffset = -1; // offset for bronzeman icon
     private boolean onSeasonalWorld;
 
-    private final CrabmanModeStorageTableRepo db = new CrabmanModeStorageTableRepo();
+    private final DatabaseRepository databaseRepo = new DatabaseRepository();
 
     private CrabmanModePanel panel;
-
 
     @Provides
     CrabmanModeConfig provideConfig(ConfigManager configManager) {
@@ -206,8 +200,8 @@ public class CrabmanModePlugin extends Plugin {
     protected void startUp() throws Exception {
         super.startUp();
         onSeasonalWorld = false;
-        db.setGson(gson);
-        db.setHttpClient(okHttpClient);
+        databaseRepo.setGson(gson);
+        databaseRepo.setHttpClient(okHttpClient);
         updateNamesBronzeman();
         updateAllowedCrabman();
         initializeDatabase();
@@ -223,9 +217,12 @@ public class CrabmanModePlugin extends Plugin {
                 .build();
 
         clientToolbar.addNavigation(navButton);
-
         loadResources();
-        db.addUnlockedItemsListener((items) -> onItemsUnlocked(items));
+        databaseRepo.addItemListener((items) -> onItemsUnlocked(items));
+
+        // Add loading state listener to update UI when database state changes
+        databaseRepo.addStateListener(this::onNewDatabaseStateChanged);
+
         overlayManager.add(CrabmanModeOverlay);
         chatCommandManager.registerCommand(GBM_UNLOCKS_STRING, this::OnUnlocksCountCommand);
         chatCommandManager.registerCommand(GBM_COUNT_STRING, this::OnUnlocksCountCommand);
@@ -245,7 +242,7 @@ public class CrabmanModePlugin extends Plugin {
     @Override
     protected void shutDown() throws Exception {
         super.shutDown();
-        db.close();
+        databaseRepo.close();
         overlayManager.remove(CrabmanModeOverlay);
         chatCommandManager.unregisterCommand(GBM_UNLOCKS_STRING);
         chatCommandManager.unregisterCommand(GBM_COUNT_STRING);
@@ -269,7 +266,7 @@ public class CrabmanModePlugin extends Plugin {
             onSeasonalWorld = isSeasonalWorld(client.getWorld());
         }
         if (e.getGameState() == GameState.LOGIN_SCREEN) {
-            db.close();
+            databaseRepo.close();
         }
     }
 
@@ -337,19 +334,18 @@ public class CrabmanModePlugin extends Plugin {
         if (player != null) {
             String username = player.getName();
             if (username == null || username.isEmpty()) {
-                db.close();
-            } else if (!db.getUser().equals(username) && username.equals(enabledCrabman)) {
-                db.setUser(username);
-                if (!db.isInitialized()) {
+                databaseRepo.close();
+            } else if (!databaseRepo.getCurrentUser().equals(username) && username.equals(enabledCrabman)) {
+                if (!databaseRepo.isReady()) {
                     log.info(username + " is a crabman. Initializing database.");
                     initializeDatabase();
                 }
             } else if (!username.equals((enabledCrabman))) {
                 log.debug("Username does not match crabman name");
-                db.close();
+                databaseRepo.close();
             }
         } else {
-            db.close();
+            databaseRepo.close();
         }
     }
 
@@ -379,33 +375,35 @@ public class CrabmanModePlugin extends Plugin {
         return playerName.equals(enabledCrabman);
     }
 
-        public void unlockFilter(boolean showUntradeableItems, SortOption sortOption, String search)
-    {
+    public void unlockFilter(boolean showUntradeableItems, SortOption sortOption, String search) {
         List<ItemObject> filteredItems = new ArrayList<ItemObject>();
 
-        for (UnlockedItemEntity unlockedItem : this.db.getUnlockedItems().values()) {
+        Map<Integer, UnlockedItemEntity> unlockedItems = databaseRepo.getUnlockedItems();
+
+        for (UnlockedItemEntity unlockedItem : unlockedItems.values()) {
             ItemComposition composition = client.getItemDefinition(unlockedItem.getItemId());
 
             boolean tradeable = composition.isTradeable();
-            if (!showUntradeableItems && !tradeable) continue;
+            if (!showUntradeableItems && !tradeable)
+                continue;
 
             String itemName = composition.getMembersName();
-            if (!search.isEmpty() && !itemName.toLowerCase().contains(search)) continue;
+            if (!search.isEmpty() && !itemName.toLowerCase().contains(search))
+                continue;
 
             AsyncBufferedImage icon = itemManager.getImage(unlockedItem.getItemId());
 
-            ItemObject item = new ItemObject(unlockedItem.getItemId(), unlockedItem.getItemName(), tradeable, unlockedItem.getAcquiredOn(), icon);
+            ItemObject item = new ItemObject(unlockedItem.getItemId(), unlockedItem.getItemName(), tradeable,
+                    unlockedItem.getAcquiredOn(), icon);
             filteredItems.add(item);
         }
 
-        if (sortOption.name() == "NEW_TO_OLD")
-        {
+        if (sortOption.name() == "NEW_TO_OLD") {
             Collections.reverse(filteredItems);
         }
 
-        if (sortOption.name() == "ALPHABETICAL_ASC")
-        {
-            Collections.sort(filteredItems,new Comparator<ItemObject>() {
+        if (sortOption.name() == "ALPHABETICAL_ASC") {
+            Collections.sort(filteredItems, new Comparator<ItemObject>() {
                 @Override
                 public int compare(ItemObject i1, ItemObject i2) {
                     return i1.getName().compareToIgnoreCase(i2.getName());
@@ -413,9 +411,8 @@ public class CrabmanModePlugin extends Plugin {
             });
         }
 
-        if (sortOption.name() == "ALPHABETICAL_DESC")
-        {
-            Collections.sort(filteredItems,new Comparator<ItemObject>() {
+        if (sortOption.name() == "ALPHABETICAL_DESC") {
+            Collections.sort(filteredItems, new Comparator<ItemObject>() {
                 @Override
                 public int compare(ItemObject i1, ItemObject i2) {
                     return i2.getName().compareToIgnoreCase(i1.getName());
@@ -442,9 +439,9 @@ public class CrabmanModePlugin extends Plugin {
                 continue;
             if (i.getQuantity() <= 0)
                 continue;
-            if (!db.getUnlockedItems().containsKey(realItemId)) {
-                queueItemUnlock(realItemId, false);
-            }
+
+            // Let the repository handle duplicate checks - just attempt to unlock all items
+            queueItemUnlock(realItemId, false);
         }
     }
 
@@ -472,14 +469,33 @@ public class CrabmanModePlugin extends Plugin {
                 return;
             }
         }
-        UnlockedItemEntity unlockedItem = db.createNewUnlockedItem(itemId, client.getItemDefinition(itemId).getName());
-        log.info("Unlocking item: " + unlockedItem.getItemName());
-        try {
-            db.insertUnlockedItem(unlockedItem);
-            panel.displayItems(new ArrayList<ItemObject>());
-        } catch (Exception e) {
-            sendChatMessage("Failed to unlock item: " + unlockedItem.getItemName() + ". Check your SAS Token.");
+
+        if (databaseRepo.hasItem(itemId)) {
+            return; // Item is already unlocked
         }
+
+        UnlockedItemEntity unlockedItem = databaseRepo.createNewItem(itemId,
+                client.getItemDefinition(itemId).getName());
+
+        log.info("Unlocking item: " + unlockedItem.getItemName());
+
+        databaseRepo.insertItem(unlockedItem)
+                .whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("Failed to unlock item: " + unlockedItem.getItemName(), throwable);
+                        sendChatMessage(
+                                "Failed to unlock item: " + unlockedItem.getItemName() + ". Check your SAS Token.");
+                    } else {
+                        log.debug("Successfully unlocked item: " + unlockedItem.getItemName());
+                    }
+
+                    // Update panel
+                    if (panel != null) {
+                        clientThread.invokeLater(() -> {
+                            panel.displayItems(new ArrayList<ItemObject>());
+                        });
+                    }
+                });
     }
 
     /** Unlocks default items like a bond to a newly made profile **/
@@ -513,9 +529,10 @@ public class CrabmanModePlugin extends Plugin {
         if (children == null || children.length < 2 || children.length % 3 != 0) {
             return;
         }
-
         for (int i = 0; i < children.length; i += 3) {
-            if (!db.getUnlockedItems().containsKey(children[i + 2].getItemId())) {
+            Map<Integer, UnlockedItemEntity> unlockedItems = databaseRepo.getUnlockedItems();
+
+            if (!unlockedItems.containsKey(children[i + 2].getItemId())) {
                 children[i].setHidden(true);
                 children[i + 1].setOpacity(70);
                 children[i + 2].setOpacity(70);
@@ -539,13 +556,52 @@ public class CrabmanModePlugin extends Plugin {
     private void initializeDatabase() {
         if (config.databaseString().isEmpty()) {
             log.info("No SAS URL string provided.");
-            db.close();
+            databaseRepo.close();
             return;
         }
         log.info("Initializing connection");
-        db.updateConnection(config.databaseString());
+
+        databaseRepo.setGson(gson);
+        databaseRepo.setHttpClient(okHttpClient);
+
+        if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null) {
+            log.error("Local player is not available, cannot initialize database repository");
+            return;
+        }
+
+        databaseRepo.initialize(config.databaseString(), client.getLocalPlayer().getName())
+                .whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("Failed to initialize new database repository", throwable);
+                        sendChatMessage("Failed to connect to database. Check your SAS Token.");
+                    } else {
+                        log.info("New database repository initialization completed successfully");
+                    }
+
+                    // Update panel regardless of success/failure
+                    if (panel != null) {
+                        clientThread.invokeLater(() -> {
+                            panel.displayItems(new ArrayList<ItemObject>());
+                        });
+                    }
+                });
+    }
+
+    /**
+     * Called when new database state changes
+     */
+    private void onNewDatabaseStateChanged(mvdicarlo.crabmanmode.database.DatabaseState.State state) {
+        log.debug("New database state changed to: {}", state);
+
         if (panel != null) {
-            panel.displayItems(new ArrayList<ItemObject>());
+            // Update panel based on loading state
+            clientThread.invokeLater(() -> {
+                panel.displayLoadingState(state);
+            });
+
+            if (state == mvdicarlo.crabmanmode.database.DatabaseState.State.ERROR) {
+                sendChatMessage("Failed to connect to database. Check your SAS Token.");
+            }
         }
     }
 
@@ -731,7 +787,9 @@ public class CrabmanModePlugin extends Plugin {
             return;
         }
 
-        Collection<UnlockedItemEntity> unlocked = db.getUnlockedItems().values();
+        Map<Integer, UnlockedItemEntity> unlockedItems = databaseRepo.getUnlockedItems();
+
+        Collection<UnlockedItemEntity> unlocked = unlockedItems.values();
         long unlockedByMe = unlocked.stream()
                 .filter((item) -> item.getAcquiredBy().equals(client.getLocalPlayer().getName())).count();
 
@@ -756,7 +814,9 @@ public class CrabmanModePlugin extends Plugin {
             return;
         }
 
-        Collection<UnlockedItemEntity> unlocked = db.getUnlockedItems().values();
+        Map<Integer, UnlockedItemEntity> unlockedItems = databaseRepo.getUnlockedItems();
+
+        Collection<UnlockedItemEntity> unlocked = unlockedItems.values();
 
         final ChatMessageBuilder builder = new ChatMessageBuilder()
                 .append(ChatColorType.HIGHLIGHT)
@@ -797,24 +857,40 @@ public class CrabmanModePlugin extends Plugin {
         client.setModIcons(newModIcons);
     }
 
-    public boolean isDeletionConfirmed(final String message, final String title)
-    {
+    public boolean isDeletionConfirmed(final String message, final String title) {
         int confirm = JOptionPane.showConfirmDialog(panel,
                 message, title, JOptionPane.OK_CANCEL_OPTION);
 
         return confirm == JOptionPane.YES_OPTION;
     }
 
-	public void queueItemDelete(int id) {
+    public void queueItemDelete(int id) {
         if (!isLoggedIntoCrabman()) {
             return;
         }
-        UnlockedItemEntity unlockedItem = db.getUnlockedItems().get(id);
-        if (unlockedItem != null) {
-            db.deleteUnlockedItem(id);
-            sendChatMessage(unlockedItem.getAcquiredBy() + " has re-locked item: " + unlockedItem.getItemName() + ".");
-        } else {
-            sendChatMessage("Failed to delete item: " + id + ". Item not found.");
-        }
-	}
+
+        // Get item info for user feedback before deletion
+        Map<Integer, UnlockedItemEntity> unlockedItems = databaseRepo.getUnlockedItems();
+        UnlockedItemEntity unlockedItem = unlockedItems.get(id);
+        String itemName = (unlockedItem != null) ? unlockedItem.getItemName() : "Unknown Item (ID: " + id + ")";
+        String acquiredBy = (unlockedItem != null) ? unlockedItem.getAcquiredBy() : "Unknown";
+
+        // Let repository handle existence checks - attempt deletion regardless
+        databaseRepo.deleteItem(id)
+                .whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("Failed to delete item: " + id, throwable);
+                        sendChatMessage("Failed to delete item: " + itemName + ".");
+                    } else {
+                        sendChatMessage(acquiredBy + " has re-locked item: " + itemName + ".");
+                    }
+
+                    // Update panel
+                    if (panel != null) {
+                        clientThread.invokeLater(() -> {
+                            panel.displayItems(new ArrayList<ItemObject>());
+                        });
+                    }
+                });
+    }
 }

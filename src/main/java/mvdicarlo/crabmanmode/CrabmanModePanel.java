@@ -27,8 +27,7 @@ import java.util.stream.Collectors;
 
 @Singleton
 @Slf4j
-public class CrabmanModePanel extends PluginPanel
-{
+public class CrabmanModePanel extends PluginPanel {
     private static final int COLUMN_SIZE = 5;
     private static final int ICON_WIDTH = 36;
     private static final int ICON_HEIGHT = 32;
@@ -51,8 +50,7 @@ public class CrabmanModePanel extends PluginPanel
     private String currentSearchText = "";
     private SortOption currentSortOption = SortOption.NEW_TO_OLD; // Default sort option
 
-    CrabmanModePanel()
-    {
+    CrabmanModePanel() {
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
@@ -115,10 +113,10 @@ public class CrabmanModePanel extends PluginPanel
 
         // Button to search bank
         JButton filterButton = new JButton();
-        filterButton.addActionListener((actionEvent) ->
-        {
+        filterButton.addActionListener((actionEvent) -> {
             currentSearchText = searchBar.getText();
-            clientThread.invokeLater(() -> plugin.unlockFilter(showUntradeableItems.isSelected(), (SortOption) sortDropDown.getSelectedItem(), currentSearchText));
+            clientThread.invokeLater(() -> plugin.unlockFilter(showUntradeableItems.isSelected(),
+                    (SortOption) sortDropDown.getSelectedItem(), currentSearchText));
         });
         filterButton.setText("View Items");
         filterButton.setFocusable(false);
@@ -134,19 +132,17 @@ public class CrabmanModePanel extends PluginPanel
         add(itemsPanel);
     }
 
-    public void displayItems(List<ItemObject> filteredItems)
-    {
+    public void displayItems(List<ItemObject> filteredItems) {
         this.allItems = new ArrayList<>(filteredItems);
         applyFiltersAndSort();
     }
 
-    private void applyFiltersAndSort()
-    {
+    private void applyFiltersAndSort() {
         // Filter items based on search text
         List<ItemObject> filteredItems = allItems.stream()
-            .filter(item -> currentSearchText.isEmpty() || 
-                   item.getName().toLowerCase().contains(currentSearchText.toLowerCase()))
-            .collect(Collectors.toList());
+                .filter(item -> currentSearchText.isEmpty() ||
+                        item.getName().toLowerCase().contains(currentSearchText.toLowerCase()))
+                .collect(Collectors.toList());
 
         // Sort items based on the selected sort option
         sortItems(filteredItems);
@@ -155,10 +151,8 @@ public class CrabmanModePanel extends PluginPanel
         SwingUtilities.invokeLater(() -> updateItemsDisplay(filteredItems));
     }
 
-    private void sortItems(List<ItemObject> items)
-    {
-        switch (currentSortOption)
-        {
+    private void sortItems(List<ItemObject> items) {
+        switch (currentSortOption) {
             case NEW_TO_OLD:
                 // Sort by acquiredOn in descending order (newest first)
                 items.sort((item1, item2) -> item2.getAcquiredOn().compareTo(item1.getAcquiredOn()));
@@ -220,8 +214,8 @@ public class CrabmanModePanel extends PluginPanel
                 final JMenuItem inspectButton = new JMenuItem("Inspect " + item.getName());
                 inspectButton.addActionListener(e -> {
                     final ChatMessageBuilder examination = new ChatMessageBuilder()
-                        .append(ChatColorType.NORMAL)
-                        .append("This is an unlocked item called '" + item.getName() + "'.");
+                            .append(ChatColorType.NORMAL)
+                            .append("This is an unlocked item called '" + item.getName() + "'.");
 
                     chatMessageManager.queue(QueuedMessage.builder()
                             .type(ChatMessageType.ITEM_EXAMINE)
@@ -262,8 +256,7 @@ public class CrabmanModePanel extends PluginPanel
         revalidate();
     }
 
-    public void displayMessage(final String message)
-    {
+    public void displayMessage(final String message) {
         itemsPanel.removeAll();
 
         final JTextArea textArea = new JTextArea();
@@ -279,8 +272,37 @@ public class CrabmanModePanel extends PluginPanel
         revalidate();
     }
 
+    /**
+     * Display loading state message
+     */
+    public void displayLoadingState(mvdicarlo.crabmanmode.database.DatabaseState.State state) {
+        String message;
+        switch (state) {
+            case NOT_INITIALIZED:
+                message = "Database not initialized. Please configure your SAS Token.";
+                break;
+            case INITIALIZING:
+                message = "Connecting to database...";
+                break;
+            case LOADING_DATA:
+                message = "Loading unlocked items from database...";
+                break;
+            case READY:
+                message = "Database ready! Use the 'View Items' button to see unlocked items.";
+                break;
+            case ERROR:
+                message = "Failed to connect to database. Please check your SAS Token.";
+                break;
+            default:
+                message = "Unknown database state.";
+                break;
+        }
+        displayMessage(message);
+    }
+
     private static class SortOptionDropdownRenderer extends DefaultListCellRenderer {
-        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+                boolean cellHasFocus) {
             value = ((SortOption) value).getDisplayName();
             return super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
         }
