@@ -94,6 +94,7 @@ public class AnotherBronzemanModePlugin extends Plugin
     private static final String BM_BACKUP_STRING = "!bmbackup";
 
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
+    private static final int GE_REGION_ID = 12598;
 
     private boolean LOGGING_IN = false;
 
@@ -555,6 +556,11 @@ public class AnotherBronzemanModePlugin extends Plugin
 
     void killSearchResults()
     {
+        if (client.getLocalPlayer().getWorldLocation().getRegionID() != GE_REGION_ID)
+        {
+            return;
+        }
+
         Widget grandExchangeSearchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
 
         if (grandExchangeSearchResults == null)
